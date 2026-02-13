@@ -10,6 +10,7 @@ services:
       POSTGRES_DB: gymapp
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./src/db/init.sql:/docker-entrypoint-initdb.d/init.sql
 
 volumes:
   pgdata:
