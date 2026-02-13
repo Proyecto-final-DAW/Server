@@ -62,8 +62,8 @@ Check: http://localhost:3000/api/health → should show `{"status":"ok"}`
 
 ## Workflow
 ```bash
-git checkout main
-git pull origin main
+git checkout develop
+git pull origin develop
 git checkout -b feature/ticket-name
 # work...
 git add .
