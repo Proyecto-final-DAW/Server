@@ -53,20 +53,20 @@ Check: http://localhost:3000/api/health → `{"status":"ok"}`
 
 ## Scripts
 
-| Command | Description |
-|--------|-------------|
-| `npm run dev` | Start dev server (tsx watch) |
-| `npm run build` | Compile TypeScript |
-| `npm run start` | Build and run production |
-| `npm run lint` | Run ESLint |
-| `npm run format` | Format with Prettier |
-| `npm run db:migrate` | Apply pending migrations |
-| `npm run db:migrate:down` | Rollback last migration |
+| Command                              | Description                                    |
+| ------------------------------------ | ---------------------------------------------- |
+| `npm run dev`                        | Start dev server (tsx watch)                   |
+| `npm run build`                      | Compile TypeScript                             |
+| `npm run start`                      | Build and run production                       |
+| `npm run lint`                       | Run ESLint                                     |
+| `npm run format`                     | Format with Prettier                           |
+| `npm run db:migrate`                 | Apply pending migrations                       |
+| `npm run db:migrate:down`            | Rollback last migration                        |
 | `npm run db:migrate:generate <name>` | Generate migration from `prisma/schema.prisma` |
-| `npm run db:migrate:new <name>` | Create empty migration |
-| `npm run db:dump` | Export current schema |
-| `npm run db:prisma:format` | Format Prisma schema |
-| `npm run db:prisma:validate` | Validate Prisma schema |
+| `npm run db:migrate:new <name>`      | Create empty migration                         |
+| `npm run db:dump`                    | Export current schema                          |
+| `npm run db:prisma:format`           | Format Prisma schema                           |
+| `npm run db:prisma:validate`         | Validate Prisma schema                         |
 
 **Migrations:** Edit `prisma/schema.prisma`, then `npm run db:migrate:generate descriptive_name`. See [MIGRATIONS.md](./MIGRATIONS.md).
 

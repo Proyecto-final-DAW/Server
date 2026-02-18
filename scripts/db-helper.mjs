@@ -13,7 +13,9 @@ import pg from 'pg';
 const [cmd, dbName] = process.argv.slice(2);
 
 if (!cmd || !dbName) {
-  console.error('Usage: node scripts/db-helper.mjs create-db|drop-db <database_name>');
+  console.error(
+    'Usage: node scripts/db-helper.mjs create-db|drop-db <database_name>'
+  );
   process.exit(1);
 }
 
@@ -39,7 +41,9 @@ async function main() {
       await client.query(`CREATE DATABASE "${dbName.replace(/"/g, '""')}"`);
       console.log(`Created database: ${dbName}`);
     } else if (cmd === 'drop-db') {
-      await client.query(`DROP DATABASE IF EXISTS "${dbName.replace(/"/g, '""')}"`);
+      await client.query(
+        `DROP DATABASE IF EXISTS "${dbName.replace(/"/g, '""')}"`
+      );
       console.log(`Dropped database: ${dbName}`);
     } else {
       console.error('Unknown command. Use create-db or drop-db');
