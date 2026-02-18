@@ -1,0 +1,31 @@
+# Dependencies and build
+node_modules
+dist
+build
+coverage
+
+# Lock files (don’t format)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Minified / generated
+*.min.js
+*.bundle.js
+
+# Config that has its own style
+tsconfig.json
+eslint.config.mjs
+
+# Environment (sensitive, no format)
+.env
+.env.*
+
+# Database generated
+db/schema.sql
+db/schema_before.sql
+db/schema_after.sql
+
+# Prisma generated
+prisma/migrations
+prisma/@prisma
