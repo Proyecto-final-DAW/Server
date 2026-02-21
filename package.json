@@ -7,7 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "npm run build && node dist/index.js",
-    "format": "prettier --write .",
+    "format": "prettier --write \"prisma/**\" \"scripts/**\" \"src/**\" && npm run db:prisma:format",
     "lint": "eslint .",
     "test": "echo \"Error: no test specified\" && exit 1",
     "db:migrate": "dbmate up",
@@ -45,6 +45,8 @@
     "eslint-plugin-perfectionist": "^5.5.0",
     "eslint-plugin-prettier": "^5.5.5",
     "prettier": "^3.8.1",
+    "prettier-plugin-sh": "^0.18.0",
+    "prettier-plugin-sql": "^0.18.0",
     "prisma": "^7.4.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"

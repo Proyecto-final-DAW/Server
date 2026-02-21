@@ -7,5 +7,7 @@
   "trailingComma": "es5",
   "bracketSpacing": true,
   "bracketSameLine": false,
-  "endOfLine": "lf"
+  "endOfLine": "lf",
+  "plugins": ["prettier-plugin-sh", "prettier-plugin-sql"],
+  "language": "postgresql"
 }

@@ -24,6 +24,7 @@ model User {
   goal            String?  @db.VarChar(100)
   created_at      DateTime @default(now())
   updated_at      DateTime @default(now()) @updatedAt
+  sleep_hours     Int?
 
   @@map("users")
 }

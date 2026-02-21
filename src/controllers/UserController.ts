@@ -1,11 +1,11 @@
 import { Request, Response } from 'express';
 
-import { IUserPublic } from '../models/User';
+import { UserPublic } from '../models/User';
 import * as authService from '../services/auth.service';
 import * as userService from '../services/user.service';
 
 export interface AuthRequest extends Request {
-  user?: IUserPublic;
+  user?: UserPublic;
 }
 
 const UserController = {

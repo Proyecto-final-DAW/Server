@@ -21,11 +21,10 @@ eslint.config.mjs
 .env
 .env.*
 
-# Database generated
-db/schema.sql
-db/schema_before.sql
-db/schema_after.sql
+# Root db only (migrations). src/db formatted with prettier-plugin-sql.
+/db/
 
-# Prisma generated
+# Prisma (use: npm run db:prisma:format)
+*.prisma
 prisma/migrations
 prisma/@prisma

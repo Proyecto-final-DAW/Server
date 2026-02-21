@@ -1,4 +1,4 @@
-export interface IUser {
+export interface User {
   id: number;
   name: string;
   email: string;
@@ -9,8 +9,9 @@ export interface IUser {
   height?: number;
   activity_level?: string;
   goal?: string;
+  sleep_hours?: number;
   created_at: Date;
   updated_at: Date;
 }
 
-export type IUserPublic = Omit<IUser, 'hashed_password' | 'tokens'>;
+export type UserPublic = Omit<User, 'hashed_password' | 'tokens'>;

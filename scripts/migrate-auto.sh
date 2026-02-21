@@ -37,7 +37,7 @@ TEMP_DB_URL="${DATABASE_URL/gymapp/$TEMP_DB_NAME}"
 echo "📦 Creating temporary database for desired schema..."
 
 # Drop temp DB if it exists from a previous run, then create it
-node scripts/db-helper.mjs drop-db "$TEMP_DB_NAME" 2>/dev/null || true
+node scripts/db-helper.mjs drop-db "$TEMP_DB_NAME" 2> /dev/null || true
 node scripts/db-helper.mjs create-db "$TEMP_DB_NAME" || {
   echo "❌ Failed to create temporary database"
   exit 1
@@ -52,7 +52,7 @@ export DATABASE_URL="$TEMP_DB_URL"
 npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss || {
   echo "❌ Error applying schema from Prisma"
   export DATABASE_URL="$ORIGINAL_DATABASE_URL"
-  node scripts/db-helper.mjs drop-db "$TEMP_DB_NAME" 2>/dev/null || true
+  node scripts/db-helper.mjs drop-db "$TEMP_DB_NAME" 2> /dev/null || true
   exit 1
 }
 
@@ -68,7 +68,8 @@ MIGRATION_SQL=$(migra "$DATABASE_URL" "$TEMP_DB_URL" --with-privileges --unsafe 
 
 # Clean migra output (drop warnings, info, error lines; keep only SQL)
 # Strip: drop constraint; alter column (set default|not null|data type) for existing columns — keep only additive changes e.g. add column
-CLEAN_SQL=$(echo "$MIGRATION_SQL" | grep -v "^WARNING" | grep -v "^INFO" | grep -v "ERROR:" | grep -v "destructive" | grep -v "Use the --unsafe" | grep -v "drop constraint" | grep -v 'alter column.*set default' | grep -v 'alter column.*set not null' | grep -v 'alter column.*set data type' | sed '/^$/d')
+# Strip: anything touching schema_migrations (dbmate's table — never modify it)
+CLEAN_SQL=$(echo "$MIGRATION_SQL" | grep -v "^WARNING" | grep -v "^INFO" | grep -v "ERROR:" | grep -v "destructive" | grep -v "Use the --unsafe" | grep -v "drop constraint" | grep -v 'alter column.*set default' | grep -v 'alter column.*set not null' | grep -v 'alter column.*set data type' | grep -v "schema_migrations" | sed '/^$/d')
 
 # Normalise SQL keywords to uppercase (ALTER, TABLE, ADD COLUMN, DROP COLUMN, DEFAULT, etc.)
 CLEAN_SQL=$(echo "$CLEAN_SQL" | sed \
@@ -91,9 +92,9 @@ CLEAN_SQL=$(echo "$CLEAN_SQL" | sed \
 if [ -z "$CLEAN_SQL" ] || echo "$CLEAN_SQL" | grep -q "Nothing to do"; then
   echo "⚠️  No differences between schemas"
   echo "💡 Current schema already matches schema.prisma"
-  
+
   # Cleanup
-  node scripts/db-helper.mjs drop-db "$TEMP_DB_NAME" 2>/dev/null || true
+  node scripts/db-helper.mjs drop-db "$TEMP_DB_NAME" 2> /dev/null || true
   exit 0
 fi
 
@@ -102,11 +103,11 @@ echo "📝 Creating migration: $MIGRATION_NAME..."
 npx dbmate new "$MIGRATION_NAME"
 
 # Find the newly created migration file
-MIGRATION_FILE=$(ls -t db/migrations/*${MIGRATION_NAME}*.sql 2>/dev/null | head -1)
+MIGRATION_FILE=$(ls -t db/migrations/*${MIGRATION_NAME}*.sql 2> /dev/null | head -1)
 
 if [ -z "$MIGRATION_FILE" ]; then
   echo "❌ Could not find migration file"
-  node scripts/db-helper.mjs drop-db "$TEMP_DB_NAME" 2>/dev/null || true
+  node scripts/db-helper.mjs drop-db "$TEMP_DB_NAME" 2> /dev/null || true
   exit 1
 fi
 
@@ -139,4 +140,4 @@ echo "⚠️  IMPORTANT: Review the migration before applying!"
 echo "💡 Apply with: npm run db:migrate"
 
 # Clean up temporary database
-node scripts/db-helper.mjs drop-db "$TEMP_DB_NAME" 2>/dev/null || true
+node scripts/db-helper.mjs drop-db "$TEMP_DB_NAME" 2> /dev/null || true

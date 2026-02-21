@@ -53,6 +53,7 @@ npm run db:migrate
 ## What the generator does
 
 - **Skips dangerous statements**: Removes `drop constraint` (e.g. so the unique on `email` is never dropped)
+- **Skips dbmate's table**: Removes any statement touching `schema_migrations` (used by dbmate to track migrations; Prisma schema doesn't include it, so migra would try to drop it)
 - **Skips noise**: Removes `alter column ... set default/not null/data type` for existing columns (Prisma vs PG timestamp differences)
 - **Uppercase SQL**: Writes keywords as `ALTER`, `TABLE`, `ADD COLUMN`, `DEFAULT`, `DROP COLUMN`, etc.
 - **Idempotent**: Uses `ADD COLUMN IF NOT EXISTS` and `DROP COLUMN IF EXISTS` where applicable

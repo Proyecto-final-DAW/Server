@@ -48,13 +48,13 @@ Requires `DATABASE_URL` in the environment (e.g. from `.env`).
 ## Commands
 
 ```bash
-npm run db:migrate              # Apply pending migrations
-npm run db:migrate:down         # Rollback last migration
-npm run db:migrate:new          # Create empty migration (manual)
-npm run db:migrate:generate     # Generate migration (runs migrate-auto.sh)
-npm run db:dump                 # Export current schema
-npm run db:prisma:format        # Format prisma/schema.prisma
-npm run db:prisma:validate      # Validate prisma/schema.prisma
+npm run db:migrate          # Apply pending migrations
+npm run db:migrate:down     # Rollback last migration
+npm run db:migrate:new      # Create empty migration (manual)
+npm run db:migrate:generate # Generate migration (runs migrate-auto.sh)
+npm run db:dump             # Export current schema
+npm run db:prisma:format    # Format prisma/schema.prisma
+npm run db:prisma:validate  # Validate prisma/schema.prisma
 ```
 
 Full details: [MIGRATIONS.md](../MIGRATIONS.md) in the project root.

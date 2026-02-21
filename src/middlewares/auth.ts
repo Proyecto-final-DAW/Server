@@ -1,11 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-import { IUser, IUserPublic } from '../models/User';
+import { User, UserPublic } from '../models/User';
 import * as userService from '../services/user.service';
 
 export interface AuthRequest extends Request {
-  user?: IUserPublic;
+  user?: UserPublic;
 }
 
 interface JwtPayload {
@@ -50,7 +50,7 @@ export const authentication = async (
       return res.status(401).json({ message: 'Token invalid or logged out' });
     }
 
-    const { hashed_password: _, tokens: __, ...publicUser } = user as IUser;
+    const { hashed_password: _, tokens: __, ...publicUser } = user as User;
     req.user = publicUser;
     next();
   } catch (error: unknown) {

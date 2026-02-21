@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
-import { IUserPublic } from '../models/User';
+import { UserPublic } from '../models/User';
 import * as userService from './user.service';
 
 const SALT_ROUNDS = 10;
@@ -18,11 +18,11 @@ interface LoginBody {
 }
 
 interface LoginResponse {
-  user: IUserPublic;
+  user: UserPublic;
   token: string;
 }
 
-export async function register(data: RegisterBody): Promise<IUserPublic> {
+export async function register(data: RegisterBody): Promise<UserPublic> {
   const existing = await userService.findByEmail(data.email);
   if (existing) {
     const err = new Error('EMAIL_IN_USE');
@@ -35,7 +35,7 @@ export async function register(data: RegisterBody): Promise<IUserPublic> {
     data.email,
     hashedPassword
   );
-  return user as IUserPublic;
+  return user as UserPublic;
 }
 
 export async function login(data: LoginBody): Promise<LoginResponse> {
@@ -71,7 +71,7 @@ export async function login(data: LoginBody): Promise<LoginResponse> {
 
   const { hashed_password: _, tokens: __, ...publicUser } = user;
   return {
-    user: publicUser as IUserPublic,
+    user: publicUser as UserPublic,
     token,
   };
 }
