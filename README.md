@@ -45,7 +45,7 @@ CREATE DATABASE gymapp OWNER gymuser;
 cp .env.example .env
 # Edit .env: set JWT_SECRET (and EXERCISEDB_API_KEY if needed)
 npm install
-npm run db:migrate   # apply migrations
+npm run db:migrate # apply migrations
 npm run dev
 ```
 

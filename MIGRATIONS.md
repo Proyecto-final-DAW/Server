@@ -63,17 +63,17 @@ npm run db:migrate
 
 ```bash
 # Migrations
-npm run db:migrate              # Apply pending migrations
-npm run db:migrate:down         # Rollback last migration
-npm run db:migrate:new          # Create empty migration (manual)
-npm run db:migrate:generate     # Generate migration automatically
+npm run db:migrate          # Apply pending migrations
+npm run db:migrate:down     # Rollback last migration
+npm run db:migrate:new      # Create empty migration (manual)
+npm run db:migrate:generate # Generate migration automatically
 
 # Prisma (schema only)
-npm run db:prisma:format        # Format prisma/schema.prisma
-npm run db:prisma:validate      # Validate prisma/schema.prisma
+npm run db:prisma:format   # Format prisma/schema.prisma
+npm run db:prisma:validate # Validate prisma/schema.prisma
 
 # Utilities
-npm run db:dump                 # Export current schema
+npm run db:dump # Export current schema
 ```
 
 ## Requirements
