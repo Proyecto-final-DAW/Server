@@ -1,0 +1,17 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "prisma.prisma",
+    "ms-vscode.vscode-typescript-next",
+    "usernamehw.errorlens",
+    "christian-kohler.path-intellisense",
+    "streetsidesoftware.code-spell-checker",
+    "streetsidesoftware.code-spell-checker-spanish",
+    "mtxr.sqltools",
+    "mtxr.sqltools-driver-pg",
+    "timonwong.shellcheck",
+    "github.vscode-github-actions"
+  ],
+  "unwantedRecommendations": []
+}

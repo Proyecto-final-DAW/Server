@@ -1,45 +1,38 @@
-# Proyecto-Final-DAW — Backend
+# Gym App — Backend
 
-Web application for new gym users (Express server).
+Express API for gym users (auth, users, health).
 
 ## Prerequisites
 
-- **Node.js v22.19+** → https://nodejs.org
-- **npm v10.9+** (included with Node.js)
-- **Git v2.51+** → https://git-scm.com
-- **Docker Desktop** (option A) → https://www.docker.com/products/docker-desktop
+- **Node.js v22+** → https://nodejs.org
+- **npm v10+** (included with Node.js)
+- **Git** → https://git-scm.com
+- **Docker** (option A) → https://www.docker.com/products/docker-desktop
 - **PostgreSQL 15** (option B) → https://www.postgresql.org/download
+- **Python 3 + pip** (for automatic migrations) → `pip3 install migra-maintained psycopg2-binary`
 
 ## 1. Clone
+
 ```bash
-git clone https://github.com/tmllabres/Proyecto-Final-DAW-server.git
-cd Proyecto-Final-DAW-server
+git clone <your-repo-url>
+cd Server
 ```
 
 ## 2. Database
 
-### Option A — With Docker (recommended)
+### Option A — Docker (recommended)
+
 ```bash
 docker compose up -d
 ```
 
-To check it's running:
-```bash
-docker compose ps
-```
+Check: `docker compose ps` · Stop: `docker compose down`
 
-To stop:
-```bash
-docker compose down
-```
+### Option B — Local PostgreSQL
 
-### Option B — Without Docker (local PostgreSQL)
+1. Install PostgreSQL 15; set password to `gympass`.
+2. Create user and DB:
 
-1. Install PostgreSQL 15 from the official website
-2. During installation, set password to: `gympass`
-3. Open **SQL Shell (psql)** from the Start menu
-4. Press Enter on everything until it asks for password → type `gympass`
-5. Run:
 ```sql
 CREATE USER gymuser WITH PASSWORD 'gympass';
 CREATE DATABASE gymapp OWNER gymuser;
@@ -47,28 +40,59 @@ CREATE DATABASE gymapp OWNER gymuser;
 ```
 
 ## 3. Install and run
+
 ```bash
 cp .env.example .env
+# Edit .env: set JWT_SECRET (and EXERCISEDB_API_KEY if needed)
 npm install
+npm run db:migrate # apply migrations
 npm run dev
 ```
 
-On PowerShell if `cp` doesn't work:
-```powershell
-copy .env.example .env
-```
+Check: http://localhost:3000/api/health → `{"status":"ok"}`
 
-Check: http://localhost:3000/api/health → should show `{"status":"ok"}`
+## Scripts
+
+| Command                              | Description                                    |
+| ------------------------------------ | ---------------------------------------------- |
+| `npm run dev`                        | Start dev server (tsx watch)                   |
+| `npm run build`                      | Compile TypeScript                             |
+| `npm run start`                      | Build and run production                       |
+| `npm run lint`                       | Run ESLint                                     |
+| `npm run format`                     | Format with Prettier                           |
+| `npm run db:migrate`                 | Apply pending migrations                       |
+| `npm run db:migrate:down`            | Rollback last migration                        |
+| `npm run db:migrate:generate <name>` | Generate migration from `prisma/schema.prisma` |
+| `npm run db:migrate:new <name>`      | Create empty migration                         |
+| `npm run db:dump`                    | Export current schema                          |
+| `npm run db:prisma:format`           | Format Prisma schema                           |
+| `npm run db:prisma:validate`         | Validate Prisma schema                         |
+
+**Migrations:** Edit `prisma/schema.prisma`, then `npm run db:migrate:generate descriptive_name`. See [MIGRATIONS.md](./MIGRATIONS.md).
 
 ## Workflow
+
 ```bash
 git checkout develop
 git pull origin develop
-git checkout -b feature/ticket-name
+git checkout -b feature/short-name
 # work...
 git add .
-git commit -m "feat: change description"
-git push origin feature/ticket-name
+git commit -m "feat: description"
+git push origin feature/short-name
 ```
 
-Open PR on GitHub → wait for approval → merge.
+Open a PR → review → merge.
+
+## Project layout
+
+- `src/` — Application code (Express, routes, services, db)
+- `db/migrations/` — dbmate SQL migrations
+- `prisma/schema.prisma` — Schema used to generate migrations (not Prisma Client in code)
+- `scripts/` — Migration generator (`migrate-auto.sh`), db helper
+- `.github/workflows/` — CI/CD (when added)
+
+## Docs
+
+- [MIGRATIONS.md](./MIGRATIONS.md) — Automatic migrations (dbmate + Prisma + migra)
+- [scripts/README.md](./scripts/README.md) — Scripts reference
