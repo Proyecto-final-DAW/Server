@@ -1,0 +1,30 @@
+// This file defines the desired database schema
+// It is used only to generate migrations automatically with migra
+// It is not necessary to use Prisma Client in the code
+
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "@prisma/client"
+}
+
+model User {
+  id              Int      @id @default(autoincrement())
+  name            String   @db.VarChar(100)
+  email           String   @unique @db.VarChar(100)
+  hashed_password String   @db.Text
+  tokens          String[] @default([])
+  age             Int?
+  weight          Decimal? @db.Decimal(4, 1)
+  height          Decimal? @db.Decimal(4, 1)
+  activity_level  String?  @db.VarChar(100)
+  goal            String?  @db.VarChar(100)
+  created_at      DateTime @default(now())
+  updated_at      DateTime @default(now()) @updatedAt
+  sleep_hours     Int?
+
+  @@map("users")
+}
