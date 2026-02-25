@@ -3,13 +3,14 @@ services:
     image: postgres:15
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      - '5432:5432'
     environment:
       POSTGRES_USER: gymuser
       POSTGRES_PASSWORD: gympass
       POSTGRES_DB: gymapp
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./src/db/init.sql:/docker-entrypoint-initdb.d/init.sql
 
 volumes:
   pgdata:
