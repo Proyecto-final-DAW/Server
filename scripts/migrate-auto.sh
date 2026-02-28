@@ -15,7 +15,7 @@ fi
 
 # Load environment variables
 if [ -f .env ]; then
-  export $(cat .env | grep -v '^#' | xargs)
+  export $(cat .env | tr -d '\r' | grep -v '^#' | xargs)
 fi
 
 if [ -z "$DATABASE_URL" ]; then
