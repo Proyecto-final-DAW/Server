@@ -1,16 +1,3 @@
-/**
- * StatsController.ts — El puente HTTP para stats
- *
- * Mismo patrón que UserController:
- * - Recibe la petición HTTP (req, res)
- * - Extrae datos de req.user (puesto por el middleware auth.ts) y req.body
- * - Llama al servicio (stats.service.ts)
- * - Formatea la respuesta HTTP
- *
- * TODAS las rutas de stats son PROTEGIDAS (requieren autenticación).
- * El middleware auth.ts ya verificó el token y puso req.user antes de llegar aquí.
- */
-
 import { Response } from 'express';
 
 import * as statsService from '../services/stats.service';
@@ -47,19 +34,22 @@ const StatsController = {
       const allowedFields = [
         'strength',
         'endurance',
-        'speed',
-        'flexibility',
+        'stamina',
+        'agility',
+        'tenacity',
+        'vigor',
         'strength_level',
         'endurance_level',
-        'speed_level',
-        'flexibility_level',
+        'stamina_level',
+        'agility_level',
+        'tenacity_level',
+        'vigor_level',
         'streak',
         'best_streak',
         'last_session_date',
       ];
 
       const data = req.body as Record<string, unknown>;
-      // Filtrar solo campos permitidos (whitelist) — previene SQL injection por nombre de campo
       const filtered: Record<string, unknown> = {};
       for (const key of Object.keys(data)) {
         if (allowedFields.includes(key)) {
@@ -91,7 +81,6 @@ const StatsController = {
         return res.status(401).json({ message: 'Not authorized' });
       }
 
-      // Comprobar si ya tiene stats (evitar duplicados)
       const exists = await statsService.existsForUser(userId);
       if (exists) {
         return res.status(409).json({ message: 'Stats already initialized' });

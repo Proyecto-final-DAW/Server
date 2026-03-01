@@ -1,14 +1,13 @@
 /**
  * Stats.ts — La forma de los datos de stats RPG
  *
- * ¿De dónde vienen estos datos?
- * Corresponden EXACTAMENTE a las columnas de la tabla "stats" en PostgreSQL.
- * Cuando haces SELECT * FROM stats, PostgreSQL devuelve un objeto con estas propiedades.
- * El driver pg convierte los tipos automáticamente (INTEGER → number, DATE → Date, etc.)
- *
- * ¿Quién usa esta interface?
- * - stats.service.ts → para tipar lo que devuelve la BD
- * - StatsController.ts → para tipar lo que envía al frontend
+ * 6 stats del sistema RPG:
+ * - Fuerza (strength)     → peso levantado en ejercicios
+ * - Resistencia (endurance) → series × reps
+ * - Estamina (stamina)    → ejercicios de cardio
+ * - Agilidad (agility)    → bajada de peso corporal
+ * - Tenacidad (tenacity)  → racha y sesiones totales
+ * - Vigor (vigor)         → cumplir macros de nutrición
  */
 
 export interface Stats {
@@ -16,21 +15,20 @@ export interface Stats {
   user_id: number;
   strength: number;
   endurance: number;
-  speed: number;
-  flexibility: number;
+  stamina: number;
+  agility: number;
+  tenacity: number;
+  vigor: number;
   strength_level: number;
   endurance_level: number;
-  speed_level: number;
-  flexibility_level: number;
+  stamina_level: number;
+  agility_level: number;
+  tenacity_level: number;
+  vigor_level: number;
   streak: number;
   best_streak: number;
-  last_session_date: Date | null; // NULL = nunca ha entrenado
+  last_session_date: Date | null;
   updated_at: Date;
 }
 
-/**
- * Lo que el frontend necesita ver.
- * Quitamos el id interno de la tabla — al frontend le basta con saber
- * que estos stats pertenecen al usuario autenticado (vía req.user).
- */
 export type StatsPublic = Omit<Stats, 'id'>;
