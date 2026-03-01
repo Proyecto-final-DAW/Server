@@ -1,12 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-import { User, UserPublic } from '../models/User';
+import { User } from '../models/User';
 import * as userService from '../services/user.service';
-
-export interface AuthRequest extends Request {
-  user?: UserPublic;
-}
 
 interface JwtPayload {
   userId: number;
@@ -22,7 +18,7 @@ interface JwtError extends Error {
 }
 
 export const authentication = async (
-  req: AuthRequest,
+  req: Request,
   res: Response,
   next: NextFunction
 ) => {
@@ -44,7 +40,6 @@ export const authentication = async (
       return res.status(401).json({ message: 'Not authorized' });
     }
 
-    // Verify that the token is in the list of valid tokens for the user
     const tokenValid = await userService.hasToken(payload.userId, token);
     if (!tokenValid) {
       return res.status(401).json({ message: 'Token invalid or logged out' });
