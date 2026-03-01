@@ -1,5 +1,4 @@
 
-
 datasource db {
   provider = "postgresql"
 }
@@ -16,34 +15,41 @@ model User {
   hashed_password String   @db.Text
   tokens          String[] @default([])
   age             Int?
+  birth_date      DateTime? @db.Date
+  sex             String?  @db.Text
   weight          Decimal? @db.Decimal(4, 1)
   height          Decimal? @db.Decimal(4, 1)
   activity_level  String?  @db.VarChar(100)
   goal            String?  @db.VarChar(100)
+  sleep_hours     Int?
+  daily_calories  Int?
+  protein_grams   Int?
+  fat_grams       Int?
+  carb_grams      Int?
+  onboarding_completed Boolean @default(false)
   created_at      DateTime @default(now())
   updated_at      DateTime @default(now()) @updatedAt
-  sleep_hours     Int?
 
-  stats Stats? 
+  stats Stats?
 
   @@map("users")
 }
 
 model Stats {
-  id               Int       @id @default(autoincrement())
-  user_id          Int       @unique // UNIQUE = relación 1:1 (solo una fila de stats por usuario)
-  strength         Int       @default(0)
-  endurance        Int       @default(0)
-  speed            Int       @default(0)
-  flexibility      Int       @default(0)
-  strength_level   Int       @default(1)
-  endurance_level  Int       @default(1)
-  speed_level      Int       @default(1)
-  flexibility_level Int      @default(1)
-  streak           Int       @default(0)
-  best_streak      Int       @default(0)
+  id                Int       @id @default(autoincrement())
+  user_id           Int       @unique
+  strength          Int       @default(0)
+  endurance         Int       @default(0)
+  speed             Int       @default(0)
+  flexibility       Int       @default(0)
+  strength_level    Int       @default(1)
+  endurance_level   Int       @default(1)
+  speed_level       Int       @default(1)
+  flexibility_level Int       @default(1)
+  streak            Int       @default(0)
+  best_streak       Int       @default(0)
   last_session_date DateTime? @db.Date
-  updated_at       DateTime  @default(now()) @updatedAt
+  updated_at        DateTime  @default(now()) @updatedAt
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
