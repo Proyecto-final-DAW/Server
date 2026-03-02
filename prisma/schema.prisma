@@ -1,3 +1,9 @@
+/**
+ * This file defines the desired database schema.
+ * It is used only to generate migrations automatically with migra.
+ * It is not necessary to use Prisma Client in the code.
+ */
+
 datasource db {
   provider = "postgresql"
 }
