@@ -15,7 +15,7 @@ fi
 
 # Load environment variables
 if [ -f .env ]; then
-  export $(cat .env | grep -v '^#' | xargs)
+  export $(cat .env | tr -d '\r' | grep -v '^#' | xargs)
 fi
 
 if [ -z "$DATABASE_URL" ]; then
@@ -78,7 +78,7 @@ CLEAN_SQL=$(echo "$CLEAN_SQL" | sed \
   -e 's/ drop column / DROP COLUMN /g' \
   -e 's/ table / TABLE /g' \
   -e 's/ default / DEFAULT /g' \
-  -e 's/ not null/NOT NULL/g' \
+  -e 's/ not null/ NOT NULL/g' \
   -e 's/ primary key/ PRIMARY KEY/g' \
   -e 's/ unique / UNIQUE /g' \
   -e 's/ references / REFERENCES /g' \

@@ -6,6 +6,7 @@ import cors from 'cors';
 import express from 'express';
 
 import pool from './db/pool';
+import statsRouter from './routes/stats';
 import usersRouter from './routes/users';
 
 const requiredEnvVars = [
@@ -29,6 +30,7 @@ app.use(cors());
 app.use(express.json());
 
 app.use('/users', usersRouter);
+app.use('/stats', statsRouter);
 
 async function connectDatabase(): Promise<void> {
   const client = await pool.connect();
