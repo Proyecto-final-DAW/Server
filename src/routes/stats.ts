@@ -5,7 +5,7 @@ import { authentication } from '../middlewares/auth';
 
 const router = express.Router();
 
-// Todas protegidas — requieren token válido
+// All protected — require valid token
 router.get('/', authentication, StatsController.getStats);
 router.put('/', authentication, StatsController.updateStats);
 router.post('/init', authentication, StatsController.initStats);

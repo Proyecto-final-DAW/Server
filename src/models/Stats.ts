@@ -1,13 +1,13 @@
 /**
- * Stats.ts — La forma de los datos de stats RPG
+ * Stats.ts — RPG stats data shape
  *
- * 6 stats del sistema RPG:
- * - Fuerza (strength)     → peso levantado en ejercicios
- * - Resistencia (endurance) → series × reps
- * - Estamina (stamina)    → ejercicios de cardio
- * - Agilidad (agility)    → bajada de peso corporal
- * - Tenacidad (tenacity)  → racha y sesiones totales
- * - Vigor (vigor)         → cumplir macros de nutrición
+ * 6 RPG system stats:
+ * - Strength    → weight lifted in exercises
+ * - Endurance   → sets × reps
+ * - Stamina     → cardio exercises
+ * - Agility     → body weight loss
+ * - Tenacity    → streak and total sessions
+ * - Vigor       → hitting nutrition macros
  */
 
 export interface Stats {
