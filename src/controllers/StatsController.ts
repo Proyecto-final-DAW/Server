@@ -6,12 +6,16 @@ import { AuthRequest } from './UserController';
 const StatsController = {
   async getStats(req: AuthRequest, res: Response) {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ message: 'Not authorized' });
+      const paramId = parseInt(req.params['userId'] as string, 10);
+      if (!paramId || isNaN(paramId)) {
+        return res.status(400).json({ message: 'Invalid userId param' });
       }
 
-      const stats = await statsService.findByUserId(userId);
+      if (req.user?.id !== paramId) {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+
+      const stats = await statsService.findByUserId(paramId);
       if (!stats) {
         return res
           .status(404)
@@ -26,9 +30,13 @@ const StatsController = {
 
   async updateStats(req: AuthRequest, res: Response) {
     try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ message: 'Not authorized' });
+      const paramId = parseInt(req.params['userId'] as string, 10);
+      if (!paramId || isNaN(paramId)) {
+        return res.status(400).json({ message: 'Invalid userId param' });
+      }
+
+      if (req.user?.id !== paramId) {
+        return res.status(403).json({ message: 'Forbidden' });
       }
 
       const allowedFields = [
@@ -61,7 +69,7 @@ const StatsController = {
         return res.status(400).json({ message: 'No valid fields to update' });
       }
 
-      const updated = await statsService.updateStats(userId, filtered);
+      const updated = await statsService.updateStats(paramId, filtered);
       if (!updated) {
         return res
           .status(404)
