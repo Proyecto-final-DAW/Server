@@ -6,16 +6,9 @@ import { AuthRequest } from './UserController';
 const StatsController = {
   async getStats(req: AuthRequest, res: Response) {
     try {
-      const paramId = parseInt(req.params['userId'] as string, 10);
-      if (!paramId || isNaN(paramId)) {
-        return res.status(400).json({ message: 'Invalid userId param' });
-      }
+      const userId = parseInt(req.params['userId'] as string, 10);
 
-      if (req.user?.id !== paramId) {
-        return res.status(403).json({ message: 'Forbidden' });
-      }
-
-      const stats = await statsService.findByUserId(paramId);
+      const stats = await statsService.findByUserId(userId);
       if (!stats) {
         return res
           .status(404)
@@ -30,14 +23,7 @@ const StatsController = {
 
   async updateStats(req: AuthRequest, res: Response) {
     try {
-      const paramId = parseInt(req.params['userId'] as string, 10);
-      if (!paramId || isNaN(paramId)) {
-        return res.status(400).json({ message: 'Invalid userId param' });
-      }
-
-      if (req.user?.id !== paramId) {
-        return res.status(403).json({ message: 'Forbidden' });
-      }
+      const userId = parseInt(req.params['userId'] as string, 10);
 
       const allowedFields = [
         'strength',
@@ -69,7 +55,7 @@ const StatsController = {
         return res.status(400).json({ message: 'No valid fields to update' });
       }
 
-      const updated = await statsService.updateStats(paramId, filtered);
+      const updated = await statsService.updateStats(userId, filtered);
       if (!updated) {
         return res
           .status(404)
