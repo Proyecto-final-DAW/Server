@@ -6,7 +6,10 @@ import { AuthRequest } from './UserController';
 const StatsController = {
   async getStats(req: AuthRequest, res: Response) {
     try {
-      const userId = parseInt(req.params['userId'] as string, 10);
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: 'Not authorized' });
+      }
 
       const stats = await statsService.findByUserId(userId);
       if (!stats) {
@@ -23,7 +26,10 @@ const StatsController = {
 
   async updateStats(req: AuthRequest, res: Response) {
     try {
-      const userId = parseInt(req.params['userId'] as string, 10);
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: 'Not authorized' });
+      }
 
       const allowedFields = [
         'strength',
