@@ -6,6 +6,7 @@ import cors from 'cors';
 import express from 'express';
 
 import pool from './db/pool';
+import onboardingRouter from './routes/onboarding';
 import statsRouter from './routes/stats';
 import usersRouter from './routes/users';
 
@@ -29,8 +30,22 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.use((req, res, next) => {
+  const start = Date.now();
+
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(
+      `${req.method} ${req.originalUrl} ${res.statusCode} - ${duration}ms`
+    );
+  });
+
+  next();
+});
+
 app.use('/users', usersRouter);
 app.use('/stats', statsRouter);
+app.use('/onboarding', onboardingRouter);
 
 async function connectDatabase(): Promise<void> {
   const client = await pool.connect();

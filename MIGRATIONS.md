@@ -58,6 +58,7 @@ npm run db:migrate
 - **Uppercase SQL**: Writes keywords as `ALTER`, `TABLE`, `ADD COLUMN`, `DEFAULT`, `DROP COLUMN`, etc.
 - **Idempotent**: Uses `ADD COLUMN IF NOT EXISTS` and `DROP COLUMN IF EXISTS` where applicable
 - **Rollback**: For `ADD COLUMN` statements, generates the corresponding `DROP COLUMN IF EXISTS` in `migrate:down`
+- **Rollback (common DDL)**: Also generates `migrate:down` for common statements like `CREATE TABLE/TYPE/SEQUENCE/INDEX` and `ALTER TABLE ... ADD CONSTRAINT/ADD COLUMN` (best-effort, structural only)
 
 ## Available commands
 

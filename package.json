@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "start": "npm run build && node dist/index.js",
+    "start": "npm run db:migrate && npm run build && node dist/index.js",
     "format": "prettier --write . && npm run db:prisma:format",
     "lint": "eslint .",
     "test": "echo \"Error: no test specified\" && exit 1",
