@@ -6,6 +6,7 @@ import cors from 'cors';
 import express from 'express';
 
 import pool from './db/pool';
+import exercisesRouter from './routes/exercises';
 import statsRouter from './routes/stats';
 import usersRouter from './routes/users';
 
@@ -14,7 +15,7 @@ const requiredEnvVars = [
   'DATABASE_URL',
   'PORT',
   'JWT_EXPIRES_IN',
-  // 'EXERCISEDB_API_KEY',
+  'EXERCISEDB_API_KEY',
 ];
 const missingVars = requiredEnvVars.filter((key) => !process.env[key]);
 
@@ -26,11 +27,17 @@ if (missingVars.length > 0) {
 
 const app = express();
 
-app.use(cors());
+app.use(
+  cors({
+    origin: 'http://localhost:5173',
+    credentials: true,
+  })
+);
 app.use(express.json());
 
 app.use('/users', usersRouter);
 app.use('/stats', statsRouter);
+app.use('/exercises', exercisesRouter);
 
 async function connectDatabase(): Promise<void> {
   const client = await pool.connect();
