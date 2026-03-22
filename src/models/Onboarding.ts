@@ -1,18 +1,19 @@
 export type ActivityLevel =
-  | 'sedentary'
-  | 'light'
-  | 'moderate'
-  | 'active'
-  | 'very_active';
+  | 'SEDENTARY'
+  | 'LIGHT'
+  | 'MODERATE'
+  | 'ACTIVE'
+  | 'VERY_ACTIVE';
 
-export type Goal = 'lose_fat' | 'gain_muscle' | 'maintain' | 'health';
+export type Goal = 'LOSE_FAT' | 'GAIN_MUSCLE' | 'MAINTAIN' | 'HEALTH';
 
+/** Request body for POST /onboarding; persisted on the authenticated user's row in `users`. */
 export interface OnboardingFormData {
   name: string;
   birthDate: string;
   weight: string;
   height: string;
-  sex?: 'male' | 'female';
+  sex?: 'MALE' | 'FEMALE';
   activityLevel?: ActivityLevel;
   goal?: Goal;
 }
