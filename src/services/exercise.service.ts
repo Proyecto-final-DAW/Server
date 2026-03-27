@@ -33,26 +33,19 @@ export const searchExercises = async (
     url = `${EXERCISEDB_BASE_URL}/exercises?limit=20`;
   }
 
-  try {
-    const response = await fetch(url, { headers });
+  const response = await fetch(url, { headers });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('ExerciseDB error:', response.status, errorText);
-      throw new Error(`ExerciseDB error: ${response.status}`);
-    }
-
-    const data = (await response.json()) as Record<string, unknown>[];
-    let exercises = mapExercises(data);
-
-    if (needsClientFilter) {
-      const term = search.toLowerCase();
-      exercises = exercises.filter((e) => e.name.toLowerCase().includes(term));
-    }
-
-    return exercises;
-  } catch (err) {
-    console.error('Fetch failed:', err);
-    throw err;
+  if (!response.ok) {
+    throw new Error(`ExerciseDB error: ${response.status}`);
   }
+
+  const data = (await response.json()) as Record<string, unknown>[];
+  let exercises = mapExercises(data);
+
+  if (needsClientFilter) {
+    const term = search.toLowerCase();
+    exercises = exercises.filter((e) => e.name.toLowerCase().includes(term));
+  }
+
+  return exercises;
 };
