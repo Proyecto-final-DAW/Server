@@ -6,6 +6,13 @@ export interface Exercise {
   target: string;
 }
 
+const mapExercises = (data: Record<string, unknown>[]): Exercise[] =>
+  data.map((e) => ({
+    name: e.name as string,
+    gifUrl: e.gifUrl as string,
+    target: e.target as string,
+  }));
+
 export const searchExercises = async (
   search?: string,
   muscle?: string
@@ -16,9 +23,10 @@ export const searchExercises = async (
   };
 
   let url = '';
+  const needsClientFilter = muscle && search;
 
   if (muscle) {
-    url = `${EXERCISEDB_BASE_URL}/exercises/target/${encodeURIComponent(muscle)}?limit=20`;
+    url = `${EXERCISEDB_BASE_URL}/exercises/target/${encodeURIComponent(muscle)}?limit=${needsClientFilter ? 50 : 20}`;
   } else if (search) {
     url = `${EXERCISEDB_BASE_URL}/exercises/name/${encodeURIComponent(search)}?limit=20`;
   } else {
@@ -35,8 +43,14 @@ export const searchExercises = async (
     }
 
     const data = (await response.json()) as Record<string, unknown>[];
+    let exercises = mapExercises(data);
 
-    return data.map((exercise) => exercise as unknown as Exercise);
+    if (needsClientFilter) {
+      const term = search.toLowerCase();
+      exercises = exercises.filter((e) => e.name.toLowerCase().includes(term));
+    }
+
+    return exercises;
   } catch (err) {
     console.error('Fetch failed:', err);
     throw err;
