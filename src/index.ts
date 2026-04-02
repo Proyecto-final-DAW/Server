@@ -7,6 +7,7 @@ import express from 'express';
 
 import pool from './db/pool';
 import exercisesRouter from './routes/exercises';
+import sessionsRouter from './routes/sessions';
 import statsRouter from './routes/stats';
 import usersRouter from './routes/users';
 
@@ -37,6 +38,7 @@ app.use(express.json());
 
 app.use('/users', usersRouter);
 app.use('/stats', statsRouter);
+app.use('/sessions', sessionsRouter);
 app.use('/exercises', exercisesRouter);
 
 async function connectDatabase(): Promise<void> {
