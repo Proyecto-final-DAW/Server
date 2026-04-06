@@ -11,19 +11,21 @@ const VALID_TYPES: ExerciseType[] = [
   'stretch',
 ];
 
-const isValidExercise = (e: unknown): e is SessionExercise => {
-  if (!e || typeof e !== 'object') return false;
-  const ex = e as Record<string, unknown>;
+const isValidExercise = (
+  unknownExercise: unknown
+): unknownExercise is SessionExercise => {
+  if (!unknownExercise || typeof unknownExercise !== 'object') return false;
+  const exerciseRecord = unknownExercise as Record<string, unknown>;
   return (
-    typeof ex.exerciseId === 'string' &&
-    typeof ex.name === 'string' &&
-    VALID_TYPES.includes(ex.type as ExerciseType) &&
-    typeof ex.sets === 'number' &&
-    ex.sets > 0 &&
-    typeof ex.reps === 'number' &&
-    ex.reps > 0 &&
-    typeof ex.weight === 'number' &&
-    ex.weight >= 0
+    typeof exerciseRecord.exerciseId === 'string' &&
+    typeof exerciseRecord.name === 'string' &&
+    VALID_TYPES.includes(exerciseRecord.type as ExerciseType) &&
+    typeof exerciseRecord.sets === 'number' &&
+    exerciseRecord.sets > 0 &&
+    typeof exerciseRecord.reps === 'number' &&
+    exerciseRecord.reps > 0 &&
+    typeof exerciseRecord.weight === 'number' &&
+    exerciseRecord.weight >= 0
   );
 };
 
@@ -49,11 +51,14 @@ const SessionController = {
         });
       }
 
-      const result = await sessionService.processSession(userId, exercises);
-      return res.status(201).json(result);
-    } catch (err: unknown) {
-      const e = err as Error & { code?: string };
-      if (e.code === 'STATS_NOT_FOUND') {
+      const sessionResult = await sessionService.processSession(
+        userId,
+        exercises
+      );
+      return res.status(201).json(sessionResult);
+    } catch (error: unknown) {
+      const typedError = error as Error & { code?: string };
+      if (typedError.code === 'STATS_NOT_FOUND') {
         return res
           .status(404)
           .json({ message: 'Stats not found. Complete onboarding first.' });

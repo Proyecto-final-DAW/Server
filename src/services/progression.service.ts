@@ -80,7 +80,7 @@ export const applyGains = (
 ): StatUpdate => {
   const updates: StatUpdate = {};
 
-  for (const [, gain] of gains) {
+  for (const gain of gains.values()) {
     let currentXp = (currentStats[gain.stat] as number) + gain.xp;
     let currentLevel = currentStats[gain.level] as number;
 
