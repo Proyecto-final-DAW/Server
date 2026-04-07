@@ -1,3 +1,5 @@
+import type { Goal, Sex } from '@prisma/client';
+
 export interface User {
   id: number;
   name: string;
@@ -6,11 +8,11 @@ export interface User {
   tokens?: string[];
   age?: number;
   birth_date?: Date;
-  sex?: string;
+  sex?: Sex | null;
   weight?: number;
   height?: number;
   activity_level?: string;
-  goal?: string;
+  goal?: Goal | null;
   sleep_hours?: number;
   daily_calories?: number;
   protein_grams?: number;
