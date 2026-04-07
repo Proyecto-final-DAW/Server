@@ -15,6 +15,7 @@ generator client {
 enum Sex {
   MALE
   FEMALE
+  NON_BINARY
 }
 
 enum Goal {

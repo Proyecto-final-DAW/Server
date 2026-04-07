@@ -60,7 +60,13 @@ npm run db:migrate
 
 Always **read** the generated SQL before applying, especially for enums, data casts, and destructive changes.
 
-## What gets filtered
+- **Skips dangerous statements**: Removes `drop constraint` (e.g. so the unique on `email` is never dropped)
+- **Skips dbmate's table**: Removes any statement touching `schema_migrations` (used by dbmate to track migrations; Prisma schema doesn't include it, so migra would try to drop it)
+- **Skips noise**: Removes `alter column ... set default/not null/data type` for existing columns (Prisma vs PG timestamp differences)
+- **Uppercase SQL**: Writes keywords as `ALTER`, `TABLE`, `ADD COLUMN`, `DEFAULT`, `DROP COLUMN`, etc.
+- **Idempotent**: Uses `ADD COLUMN IF NOT EXISTS` and `DROP COLUMN IF EXISTS` where applicable
+- **Rollback**: For `ADD COLUMN` statements, generates the corresponding `DROP COLUMN IF EXISTS` in `migrate:down`
+- **Rollback (common DDL)**: Also generates `migrate:down` for common statements like `CREATE TABLE/TYPE/SEQUENCE/INDEX` and `ALTER TABLE ... ADD CONSTRAINT/ADD COLUMN` (best-effort, structural only)
 
 ### Forward SQL (`migrate:up`), before post-processing
 
