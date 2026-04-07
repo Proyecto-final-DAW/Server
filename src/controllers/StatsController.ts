@@ -44,9 +44,6 @@ const StatsController = {
         'agility_level',
         'tenacity_level',
         'vigor_level',
-        'streak',
-        'best_streak',
-        'last_session_date',
       ];
 
       const data = req.body as Record<string, unknown>;
@@ -71,6 +68,40 @@ const StatsController = {
       return res.status(200).json(updated);
     } catch {
       return res.status(500).json({ message: 'Failed to update stats' });
+    }
+  },
+
+  async registerSession(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: 'Not authorized' });
+      }
+
+      const { session_date } = req.body as { session_date?: string };
+      const date = session_date ? new Date(session_date) : undefined;
+
+      if (date && isNaN(date.getTime())) {
+        return res
+          .status(400)
+          .json({ message: 'Invalid session_date format. Use YYYY-MM-DD.' });
+      }
+
+      const result = await statsService.registerSession(userId, date);
+      if (!result) {
+        return res
+          .status(404)
+          .json({ message: 'Stats not found. Complete onboarding first.' });
+      }
+
+      return res.status(200).json({
+        streak: result.stats.streak,
+        best_streak: result.stats.best_streak,
+        last_session_date: result.stats.last_session_date,
+        changed: result.changed,
+      });
+    } catch {
+      return res.status(500).json({ message: 'Failed to register session' });
     }
   },
 

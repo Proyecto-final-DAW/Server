@@ -1,7 +1,7 @@
 /**
  * This file defines the desired database schema.
  * It is used only to generate migrations automatically with migra.
- * It is not necessary to use Prisma Client in the code.
+ * Runtime queries use `pg`; TypeScript imports enums/types from `@prisma/client` after `prisma generate`.
  */
 
 datasource db {
@@ -10,7 +10,18 @@ datasource db {
 
 generator client {
   provider = "prisma-client-js"
-  output   = "@prisma/client"
+}
+
+enum Sex {
+  MALE
+  FEMALE
+  NON_BINARY
+}
+
+enum Goal {
+  LOSE
+  GAIN
+  MAINTAIN
 }
 
 model User {
@@ -25,7 +36,7 @@ model User {
   weight               Decimal?  @db.Decimal(4, 1)
   height               Decimal?  @db.Decimal(4, 1)
   activity_level       String?   @db.VarChar(100)
-  goal                 String?   @db.VarChar(100)
+  goal                 Goal?
   sleep_hours          Int?
   daily_calories       Int?
   protein_grams        Int?
@@ -34,7 +45,9 @@ model User {
   onboarding_completed Boolean   @default(false)
   created_at           DateTime  @default(now())
   updated_at           DateTime  @default(now()) @updatedAt
-  stats                Stats?
+
+  stats    Stats?
+  sessions Session[]
 
   @@map("users")
 }
@@ -64,7 +77,13 @@ model Stats {
   @@map("stats")
 }
 
-enum Sex {
-  MALE
-  FEMALE
+model Session {
+  id         Int      @id @default(autoincrement())
+  user_id    Int
+  exercises  Json     @default("[]")
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
 }

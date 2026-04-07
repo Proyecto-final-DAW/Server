@@ -14,6 +14,12 @@ router.put(
   ensureSelf(),
   StatsController.updateStats
 );
+router.post(
+  '/:userId/session',
+  authentication,
+  ensureSelf(),
+  StatsController.registerSession
+);
 router.post('/init', authentication, StatsController.initStats);
 
 export default router;

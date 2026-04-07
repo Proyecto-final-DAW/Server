@@ -1,4 +1,7 @@
+import type { Goal, Sex } from '@prisma/client';
+
 import pool from '../db/pool';
+import { calculateCalories } from './macros.service';
 
 export const createUser = async (
   name: string,
@@ -35,6 +38,36 @@ export const updateUser = async (id: number, data: Record<string, unknown>) => {
     [...values, id]
   );
   return result.rows[0];
+};
+
+export interface NutritionProfileInput {
+  weightKg: number;
+  heightCm: number;
+  age: number;
+  sex: Sex;
+  activityFactor: number;
+  goal: Goal;
+}
+
+/** Persists `daily_calories`, `protein_grams`, `fat_grams`, and `carb_grams` from profile inputs. */
+export const updateUserMacroTargets = async (
+  userId: number,
+  input: NutritionProfileInput
+) => {
+  const macros = calculateCalories(
+    input.weightKg,
+    input.heightCm,
+    input.age,
+    input.sex,
+    input.activityFactor,
+    input.goal
+  );
+  return updateUser(userId, {
+    daily_calories: macros.daily_calories,
+    protein_grams: macros.protein_grams,
+    fat_grams: macros.fat_grams,
+    carb_grams: macros.carb_grams,
+  });
 };
 
 export const addToken = async (userId: number, token: string) => {
