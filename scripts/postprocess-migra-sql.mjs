@@ -54,7 +54,14 @@ function alterToEnumPattern(schema, table, column, enumName) {
 }
 
 function buildEnumUsingBlock(rule) {
-  const { schema, table, column, enum: enumName, valueMap, onUnknown = 'null' } = rule;
+  const {
+    schema,
+    table,
+    column,
+    enum: enumName,
+    valueMap,
+    onUnknown = 'null',
+  } = rule;
   const col = `"${column}"`;
   const en = `"${enumName}"`;
 

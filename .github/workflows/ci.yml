@@ -15,7 +15,6 @@ jobs:
     name: Lint & Build
     runs-on: ubuntu-latest
     env:
-      # Required by prisma.config.ts when running `prisma generate` (no DB connection is opened).
       DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci
     steps:
       - name: Checkout
@@ -24,7 +23,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies

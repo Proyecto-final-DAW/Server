@@ -57,17 +57,17 @@ Base URL: `http://localhost:<PORT>` (JSON bodies; `Content-Type: application/jso
 
 ### Auth (`/users`)
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/users/auth/register` | — | Register `{ name, email, password }` |
-| POST | `/users/auth/login` | — | Login `{ email, password }` → returns `token` |
-| POST | `/users/auth/logout` | Bearer token | Invalidates current session token |
+| Method | Path                   | Auth         | Description                                   |
+| ------ | ---------------------- | ------------ | --------------------------------------------- |
+| POST   | `/users/auth/register` | —            | Register `{ name, email, password }`          |
+| POST   | `/users/auth/login`    | —            | Login `{ email, password }` → returns `token` |
+| POST   | `/users/auth/logout`   | Bearer token | Invalidates current session token             |
 
 ### Macros / nutrition (`/users`)
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/users/:userId/macros/calculate` | Bearer token | `:userId` must match the authenticated user (`ensureSelf`). Body below. |
+| Method | Path                              | Auth         | Description                                                             |
+| ------ | --------------------------------- | ------------ | ----------------------------------------------------------------------- |
+| POST   | `/users/:userId/macros/calculate` | Bearer token | `:userId` must match the authenticated user (`ensureSelf`). Body below. |
 
 **`POST /users/:userId/macros/calculate` body**
 
@@ -97,20 +97,20 @@ Header: `Authorization: Bearer <token>` from login.
 
 ## Scripts
 
-| Command                              | Description                                    |
-| ------------------------------------ | ---------------------------------------------- |
-| `npm run dev`                        | Start dev server (tsx watch)                   |
-| `npm run build`                      | Compile TypeScript                             |
-| `npm run start`                      | Build and run production                       |
-| `npm run lint`                       | Run ESLint                                     |
-| `npm run format`                     | Format with Prettier                           |
-| `npm run db:migrate`                 | Apply pending migrations                       |
-| `npm run db:migrate:down`            | Rollback last migration                        |
+| Command                              | Description                                                     |
+| ------------------------------------ | --------------------------------------------------------------- |
+| `npm run dev`                        | Start dev server (tsx watch)                                    |
+| `npm run build`                      | Compile TypeScript                                              |
+| `npm run start`                      | Build and run production                                        |
+| `npm run lint`                       | Run ESLint                                                      |
+| `npm run format`                     | Format with Prettier                                            |
+| `npm run db:migrate`                 | Apply pending migrations                                        |
+| `npm run db:migrate:down`            | Rollback last migration                                         |
 | `npm run db:migrate:generate <name>` | Generate migration from `prisma/schema.prisma` (see note below) |
-| `npm run db:migrate:new <name>`      | Create empty migration                         |
-| `npm run db:dump`                    | Export current schema                          |
-| `npm run db:prisma:format`           | Format Prisma schema                           |
-| `npm run db:prisma:validate`         | Validate Prisma schema                         |
+| `npm run db:migrate:new <name>`      | Create empty migration                                          |
+| `npm run db:dump`                    | Export current schema                                           |
+| `npm run db:prisma:format`           | Format Prisma schema                                            |
+| `npm run db:prisma:validate`         | Validate Prisma schema                                          |
 
 **Migrations:** Edit `prisma/schema.prisma`, then run `npm run db:migrate:generate descriptive_name`. If npm does not forward the name, use `npm run db:migrate:generate -- descriptive_name`. Details: [MIGRATIONS.md](./MIGRATIONS.md) and [scripts/README.md](./scripts/README.md).
 

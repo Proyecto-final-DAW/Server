@@ -13,7 +13,7 @@ No `createdb` / `dropdb` CLI tools are required on the host; **`scripts/db-helpe
 ## Prerequisites
 
 - **Node / npm** (project)
-- **Prisma 7.x** — connection URL in **`prisma.config.ts`** (`datasource.url: env("DATABASE_URL")`), not in `schema.prisma`
+- **Prisma 7.x** — connection URL in **`prisma.config.ts`** (`process.env.DATABASE_URL` with a generate-only fallback if unset), not in `schema.prisma`
 - **migra** (Python):
 
 ```bash
@@ -54,7 +54,7 @@ This runs **`scripts/migrate-auto.sh`**, which:
 ### 3. Review and apply
 
 ```bash
-cat db/migrations/*_descriptive_name.sql   # optional
+cat db/migrations/*_descriptive_name.sql # optional
 npm run db:migrate
 ```
 
@@ -86,10 +86,10 @@ Then **`ADD COLUMN "`** is rewritten to **`ADD COLUMN IF NOT EXISTS "`** for ide
 
 **`scripts/postprocess-migra-sql.mjs`** reads **`scripts/migra-postprocess.config.json`**:
 
-| Phase | Behavior |
-| ----- | -------- |
-| **`--up`** | For each **`enumColumns`** entry, replaces migra’s single-line cast `ALTER … SET DATA TYPE "Enum" USING …` with a **`CASE … USING`** built from **`valueMap`**, so legacy text (e.g. `LOSE_FAT`) maps to Prisma enum values (`LOSE`). |
-| **`--down`** | Drops any line matching regexes in **`downLineFilters`** (e.g. spurious **`UNIQUE USING INDEX`** lines from index/constraint naming differences). |
+| Phase        | Behavior                                                                                                                                                                                                                              |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`--up`**   | For each **`enumColumns`** entry, replaces migra’s single-line cast `ALTER … SET DATA TYPE "Enum" USING …` with a **`CASE … USING`** built from **`valueMap`**, so legacy text (e.g. `LOSE_FAT`) maps to Prisma enum values (`LOSE`). |
+| **`--down`** | Drops any line matching regexes in **`downLineFilters`** (e.g. spurious **`UNIQUE USING INDEX`** lines from index/constraint naming differences).                                                                                     |
 
 To add another column or synonyms, edit **`migra-postprocess.config.json`** only.
 
@@ -98,14 +98,14 @@ If the reverse migra run produces nothing usable, **`migrate:down`** is a short 
 ## Commands reference
 
 ```bash
-npm run db:migrate              # Apply pending migrations (dbmate up)
-npm run db:migrate:down         # Rollback last migration
-npm run db:migrate:new          # Create an empty migration (manual SQL)
-npm run db:migrate:generate     # Run migrate-auto.sh (pass migration name)
+npm run db:migrate          # Apply pending migrations (dbmate up)
+npm run db:migrate:down     # Rollback last migration
+npm run db:migrate:new      # Create an empty migration (manual SQL)
+npm run db:migrate:generate # Run migrate-auto.sh (pass migration name)
 
-npm run db:prisma:format        # Format prisma/schema.prisma
-npm run db:prisma:validate      # Validate prisma/schema.prisma
-npm run db:dump                 # Export current schema (dbmate)
+npm run db:prisma:format   # Format prisma/schema.prisma
+npm run db:prisma:validate # Validate prisma/schema.prisma
+npm run db:dump            # Export current schema (dbmate)
 ```
 
 After changing **`prisma/schema.prisma`** enums or models used in TypeScript, run **`npx prisma generate`** so **`@prisma/client`** stays in sync.
@@ -126,11 +126,11 @@ npm run db:migrate
 
 ## This approach vs full Prisma Migrate
 
-| Topic | This repo | Full Prisma Migrate |
-| ----- | --------- | ------------------- |
-| Query layer | `pg` (raw SQL) | Often Prisma Client |
-| Migration files | dbmate SQL | Prisma migrations |
-| Schema authoring | `schema.prisma` + migra diff | `schema.prisma` |
+| Topic            | This repo                    | Full Prisma Migrate |
+| ---------------- | ---------------------------- | ------------------- |
+| Query layer      | `pg` (raw SQL)               | Often Prisma Client |
+| Migration files  | dbmate SQL                   | Prisma migrations   |
+| Schema authoring | `schema.prisma` + migra diff | `schema.prisma`     |
 
 ## Important notes
 
