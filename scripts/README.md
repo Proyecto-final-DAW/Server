@@ -1,60 +1,74 @@
-# Migration Scripts
+# Scripts (migrations & DB helper)
+
+This folder supports **automatic dbmate migrations** driven by **`prisma/schema.prisma`**. For the full workflow, filters, and caveats, read **[MIGRATIONS.md](../MIGRATIONS.md)** in the project root.
 
 ## migrate-auto.sh
 
-Generates **dbmate** migrations automatically by comparing the current database with **Prisma**’s `schema.prisma`, using **migra** for the diff.
+**Entry:** `npm run db:migrate:generate` → `./scripts/migrate-auto.sh <migration_name>`  
+If npm does not pass the name through, use:
+
+```bash
+npm run db:migrate:generate -- my_migration_name
+```
 
 **Requirements**
 
 - **migra** (Python): `pip3 install migra-maintained psycopg2-binary`
-- **Prisma 7.x** and `prisma.config.ts` with `datasource.url` from `env("DATABASE_URL")`
-- No `createdb`/`dropdb` needed; the script uses Node and `scripts/db-helper.mjs` (pg) to create/drop the temporary DB
+- **Prisma 7.x** + **`prisma.config.ts`** (uses `DATABASE_URL` from the environment, or a placeholder during `prisma generate` only)
+- **`.env`** with **`DATABASE_URL`** (script loads it when present)
 
-**Usage**
+**Steps (summary)**
 
-```bash
-# 1. Edit prisma/schema.prisma with the desired schema
+1. Create a temporary PostgreSQL database (via **`db-helper.mjs`** — no `createdb` CLI required).
+2. **`prisma db push`** that DB to the desired schema.
+3. **migra** forward: real DB → temp DB → filtered → **`postprocess-migra-sql.mjs --up`** → **`migrate:up`** body.
+4. **migra** reverse: temp DB → real DB → filtered → **`postprocess-migra-sql.mjs --down`** → **`migrate:down`** body (or a manual placeholder if empty).
+5. **`dbmate new`** and write the SQL file; drop the temp DB.
 
-# 2. Generate migration
-npm run db:migrate:generate descriptive_name
+**Important:** The script builds the temp DB URL by replacing **`gymapp`** inside **`DATABASE_URL`**. If your database name differs, see **MIGRATIONS.md** (Prerequisites).
 
-# 3. Review db/migrations/<timestamp>_descriptive_name.sql
+Always **review** the generated SQL before **`npm run db:migrate`**.
 
-# 4. Apply
-npm run db:migrate
-```
+## postprocess-migra-sql.mjs & migra-postprocess.config.json
 
-**What it does**
+| File                                | Role                                                                                                                                               |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`migra-postprocess.config.json`** | Declarative rules: **`enumColumns`** (synonym → enum value for safe `CASE … USING`), **`downLineFilters`** (regexes to drop noisy rollback lines). |
+| **`postprocess-migra-sql.mjs`**     | Reads stdin, applies config for **`--up`** or **`--down`**, writes stdout. Invoked from **`migrate-auto.sh`** only.                                |
 
-- Creates a temporary DB, applies `schema.prisma` with `prisma db push`
-- Runs migra to diff your real DB vs that temp DB
-- Writes a migration file with:
-  - **migrate:up**: UPPERCASE SQL, `ADD COLUMN IF NOT EXISTS` (and similar), and filters out `drop constraint` and noisy `alter column` lines
-  - **migrate:down**: Generated rollback (e.g. `DROP COLUMN IF EXISTS`) when the up section contains `ADD COLUMN`
-- Cleans up the temporary database
+Add new enum columns or synonyms by editing **only** the JSON file.
 
 ## db-helper.mjs
 
-Helper used by `migrate-auto.sh` to create and drop the temporary PostgreSQL database via the `pg` driver (so `createdb`/`dropdb` are not required).
+Creates or drops a PostgreSQL database using the **`pg`** driver (used for the migra temp DB).
 
 ```bash
-# Called by the script; usually you don’t run this yourself
-node scripts/db-helper.mjs create-db <name>
-node scripts/db-helper.mjs drop-db <name>
+node scripts/db-helper.mjs create-db <database_name>
+node scripts/db-helper.mjs drop-db <database_name>
 ```
 
-Requires `DATABASE_URL` in the environment (e.g. from `.env`).
+Requires **`DATABASE_URL`** (e.g. from `.env`). Normally you do not run this by hand.
 
-## Commands
+## npm scripts (migrations & Prisma)
 
 ```bash
-npm run db:migrate          # Apply pending migrations
+npm run db:migrate          # dbmate up — apply pending migrations
 npm run db:migrate:down     # Rollback last migration
-npm run db:migrate:new      # Create empty migration (manual)
-npm run db:migrate:generate # Generate migration (runs migrate-auto.sh)
-npm run db:dump             # Export current schema
-npm run db:prisma:format    # Format prisma/schema.prisma
-npm run db:prisma:validate  # Validate prisma/schema.prisma
+npm run db:migrate:new      # Empty migration template
+npm run db:migrate:generate # Runs migrate-auto.sh — pass name (see above)
+
+npm run db:dump            # dbmate schema dump
+npm run db:prisma:format   # Format prisma/schema.prisma
+npm run db:prisma:validate # Validate prisma/schema.prisma
 ```
 
-Full details: [MIGRATIONS.md](../MIGRATIONS.md) in the project root.
+After changing enums or models used in TypeScript, from the repo root:
+
+```bash
+npx prisma generate
+```
+
+## See also
+
+- **[../MIGRATIONS.md](../MIGRATIONS.md)** — Complete migration documentation
+- **[../README.md](../README.md)** — Run instructions and API overview

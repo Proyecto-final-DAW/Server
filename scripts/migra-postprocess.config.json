@@ -1,0 +1,28 @@
+{
+  "enumColumns": [
+    {
+      "schema": "public",
+      "table": "users",
+      "column": "goal",
+      "enum": "Goal",
+      "onUnknown": "null",
+      "valueMap": {
+        "LOSE": ["LOSE", "LOSE_FAT", "LOSE WEIGHT", "WEIGHT_LOSS"],
+        "GAIN": ["GAIN", "GAIN_MUSCLE", "MUSCLE_GAIN", "BUILD"],
+        "MAINTAIN": ["MAINTAIN", "MAINTENANCE", "KEEP"]
+      }
+    },
+    {
+      "schema": "public",
+      "table": "users",
+      "column": "sex",
+      "enum": "Sex",
+      "onUnknown": "null",
+      "valueMap": {
+        "MALE": ["MALE", "M", "MAN", "HOMBRE"],
+        "FEMALE": ["FEMALE", "F", "WOMAN", "MUJER"]
+      }
+    }
+  ],
+  "downLineFilters": ["UNIQUE\\s+USING\\s+INDEX"]
+}
