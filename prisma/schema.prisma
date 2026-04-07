@@ -35,7 +35,8 @@ model User {
   created_at      DateTime @default(now())
   updated_at      DateTime @default(now()) @updatedAt
 
-  stats Stats?
+  stats    Stats?
+  sessions Session[]
 
   @@map("users")
 }
@@ -63,4 +64,15 @@ model Stats {
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@map("stats")
+}
+
+model Session {
+  id         Int      @id @default(autoincrement())
+  user_id    Int
+  exercises  Json     @default("[]")
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
 }
