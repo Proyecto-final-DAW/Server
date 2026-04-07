@@ -14,6 +14,9 @@ jobs:
   lint-and-build:
     name: Lint & Build
     runs-on: ubuntu-latest
+    env:
+      # Required by prisma.config.ts when running `prisma generate` (no DB connection is opened).
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci
     steps:
       - name: Checkout
         uses: actions/checkout@v4

@@ -48,6 +48,10 @@ function goalAdjustedCalories(
       return totalDailyEnergyExpenditureKcal + GAIN_ADJUSTMENT_KCAL;
     case Goal.MAINTAIN:
       return totalDailyEnergyExpenditureKcal;
+    default: {
+      const _exhaustive: never = goal;
+      return _exhaustive;
+    }
   }
 }
 
