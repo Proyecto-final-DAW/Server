@@ -17,6 +17,7 @@ build/
 
 # ESLint
 .eslintcache
+.claude
 
 # Logs
 *.log
