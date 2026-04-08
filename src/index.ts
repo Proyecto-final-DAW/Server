@@ -7,6 +7,7 @@ import express from 'express';
 
 import pool from './db/pool';
 import exercisesRouter from './routes/exercises';
+import milestonesRouter from './routes/milestones';
 import onboardingRouter from './routes/onboarding';
 import sessionsRouter from './routes/sessions';
 import statsRouter from './routes/stats';
@@ -55,6 +56,7 @@ app.use('/stats', statsRouter);
 app.use('/onboarding', onboardingRouter);
 app.use('/sessions', sessionsRouter);
 app.use('/exercises', exercisesRouter);
+app.use('/milestones', milestonesRouter);
 
 async function connectDatabase(): Promise<void> {
   const client = await pool.connect();
