@@ -9,6 +9,7 @@ import pool from './db/pool';
 import exercisesRouter from './routes/exercises';
 import milestonesRouter from './routes/milestones';
 import onboardingRouter from './routes/onboarding';
+import profileRouter from './routes/profile';
 import sessionsRouter from './routes/sessions';
 import statsRouter from './routes/stats';
 import usersRouter from './routes/users';
@@ -52,6 +53,7 @@ app.use((req, res, next) => {
 });
 
 app.use('/users', usersRouter);
+app.use('/profile', profileRouter);
 app.use('/stats', statsRouter);
 app.use('/onboarding', onboardingRouter);
 app.use('/sessions', sessionsRouter);
