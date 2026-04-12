@@ -4,16 +4,20 @@ import pool from '../db/pool';
 import { UserPublic } from '../models/User';
 import { calculateCalories } from './macros.service';
 
+import type { Goal } from '@prisma/client';
+
 const SALT_ROUNDS = 10;
 
-const ALLOWED_PROFILE_FIELDS: Record<string, string> = {
-  name: 'name',
-  weight: 'weight',
-  height: 'height',
-  age: 'age',
-  activity_level: 'activity_level',
-  goal: 'goal',
-  sleep_hours: 'sleep_hours',
+type FieldSpec = { column: string; cast?: string };
+
+const ALLOWED_PROFILE_FIELDS: Record<string, FieldSpec> = {
+  name: { column: 'name' },
+  weight: { column: 'weight' },
+  height: { column: 'height' },
+  age: { column: 'age' },
+  activity_level: { column: 'activity_level' },
+  goals: { column: 'goals', cast: '"Goal"[]' },
+  sleep_hours: { column: 'sleep_hours' },
 };
 
 const MACRO_TRIGGER_FIELDS = [
@@ -21,7 +25,7 @@ const MACRO_TRIGGER_FIELDS = [
   'height',
   'age',
   'activity_level',
-  'goal',
+  'goals',
 ];
 
 const ACTIVITY_FACTOR_MAP: Record<string, number> = {
@@ -30,15 +34,6 @@ const ACTIVITY_FACTOR_MAP: Record<string, number> = {
   MODERATE: 1.55,
   ACTIVE: 1.725,
   VERY_ACTIVE: 1.9,
-};
-
-const GOAL_TO_MACRO: Record<string, string> = {
-  LOSE_FAT: 'LOSE',
-  GAIN_MUSCLE: 'GAIN',
-  MAINTAIN: 'MAINTAIN',
-  HEALTH: 'MAINTAIN',
-  LOSE: 'LOSE',
-  GAIN: 'GAIN',
 };
 
 function throwCoded(message: string, code: string): never {
@@ -79,22 +74,26 @@ export async function updateProfile(
   userId: number,
   data: Record<string, unknown>
 ): Promise<UserPublic> {
-  const fields: string[] = [];
+  const setParts: string[] = [];
   const values: unknown[] = [];
+  const updatedColumns: string[] = [];
 
   for (const [key, value] of Object.entries(data)) {
-    if (ALLOWED_PROFILE_FIELDS[key] && value !== undefined) {
-      fields.push(ALLOWED_PROFILE_FIELDS[key]);
+    const spec = ALLOWED_PROFILE_FIELDS[key];
+    if (spec && value !== undefined) {
       values.push(value);
+      const ph = `$${values.length}`;
+      setParts.push(`${spec.column} = ${spec.cast ? `${ph}::${spec.cast}` : ph}`);
+      updatedColumns.push(spec.column);
     }
   }
 
-  if (fields.length === 0) {
+  if (setParts.length === 0) {
     throwCoded('NO_FIELDS_TO_UPDATE', 'NO_FIELDS_TO_UPDATE');
   }
 
-  const setClause = fields.map((field, i) => `${field} = $${i + 1}`).join(', ');
-  const idPlaceholder = fields.length + 1;
+  const setClause = setParts.join(', ');
+  const idPlaceholder = values.length + 1;
 
   const result = await pool.query(
     `UPDATE users SET ${setClause}, updated_at = NOW() WHERE id = $${idPlaceholder} RETURNING *`,
@@ -107,12 +106,14 @@ export async function updateProfile(
 
   const updatedUser = result.rows[0];
 
-  const needsRecalc = fields.some((f) => MACRO_TRIGGER_FIELDS.includes(f));
+  const needsRecalc = updatedColumns.some((f) =>
+    MACRO_TRIGGER_FIELDS.includes(f)
+  );
   if (needsRecalc && canRecalcMacros(updatedUser)) {
     const activityFactor = ACTIVITY_FACTOR_MAP[updatedUser.activity_level];
-    const macroGoal = GOAL_TO_MACRO[updatedUser.goal];
+    const primaryGoal = (updatedUser.goals as Goal[])[0];
 
-    if (!activityFactor || !macroGoal) {
+    if (!activityFactor || !primaryGoal) {
       const { hashed_password: _, tokens: __, ...publicUser } = updatedUser;
       return publicUser as UserPublic;
     }
@@ -123,7 +124,7 @@ export async function updateProfile(
       updatedUser.age,
       updatedUser.sex,
       activityFactor,
-      macroGoal as 'LOSE' | 'GAIN' | 'MAINTAIN'
+      primaryGoal
     );
 
     const macroResult = await pool.query(
@@ -153,11 +154,12 @@ export async function updateProfile(
 function canRecalcMacros(user: Record<string, unknown>): boolean {
   return Boolean(
     user.weight &&
-    user.height &&
-    user.age &&
-    user.sex &&
-    user.activity_level &&
-    user.goal
+      user.height &&
+      user.age &&
+      user.sex &&
+      user.activity_level &&
+      Array.isArray(user.goals) &&
+      user.goals.length > 0
   );
 }
 

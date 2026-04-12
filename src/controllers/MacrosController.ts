@@ -17,7 +17,7 @@ function parseGoal(value: unknown): Goal | null {
 
 const MacrosController = {
   /**
-   * POST body: weightKg, heightCm, age, sex (MALE|FEMALE), activityFactor (1.2–1.9), goal (LOSE|GAIN|MAINTAIN).
+   * POST body: weightKg, heightCm, age, sex (MALE|FEMALE), activityFactor (1.2–1.9), goal (LOSE_FAT|GAIN_MUSCLE|MAINTAIN|HEALTH).
    * Optional save: true — persists daily_calories and macro grams on the user.
    */
   async calculate(req: AuthRequest, res: Response) {
@@ -51,7 +51,8 @@ const MacrosController = {
       }
       if (goal === null) {
         return res.status(400).json({
-          message: 'Invalid or missing goal; use LOSE, GAIN, or MAINTAIN',
+          message:
+            'Invalid or missing goal; use LOSE_FAT, GAIN_MUSCLE, MAINTAIN, or HEALTH',
         });
       }
 
