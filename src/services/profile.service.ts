@@ -1,10 +1,9 @@
+import type { Goal } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 import pool from '../db/pool';
 import { UserPublic } from '../models/User';
 import { calculateCalories } from './macros.service';
-
-import type { Goal } from '@prisma/client';
 
 const SALT_ROUNDS = 10;
 
@@ -83,7 +82,9 @@ export async function updateProfile(
     if (spec && value !== undefined) {
       values.push(value);
       const ph = `$${values.length}`;
-      setParts.push(`${spec.column} = ${spec.cast ? `${ph}::${spec.cast}` : ph}`);
+      setParts.push(
+        `${spec.column} = ${spec.cast ? `${ph}::${spec.cast}` : ph}`
+      );
       updatedColumns.push(spec.column);
     }
   }
@@ -154,12 +155,12 @@ export async function updateProfile(
 function canRecalcMacros(user: Record<string, unknown>): boolean {
   return Boolean(
     user.weight &&
-      user.height &&
-      user.age &&
-      user.sex &&
-      user.activity_level &&
-      Array.isArray(user.goals) &&
-      user.goals.length > 0
+    user.height &&
+    user.age &&
+    user.sex &&
+    user.activity_level &&
+    Array.isArray(user.goals) &&
+    user.goals.length > 0
   );
 }
 
