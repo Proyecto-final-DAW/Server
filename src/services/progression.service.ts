@@ -1,4 +1,5 @@
-import { ExerciseType, SessionExercise } from '../models/Session';
+import { ExerciseType } from '../models/SessionExercise';
+import { SessionExerciseInput } from './session.service';
 
 /**
  * Maps exercise types to their corresponding RPG stat columns.
@@ -26,9 +27,11 @@ const FIXED_XP = 15;
  * - Strength: volume-based (weight × reps × sets / 100), min 1
  * - Others: fixed points per exercise
  */
-const calculateExerciseXp = (exercise: SessionExercise): number => {
+const calculateExerciseXp = (exercise: SessionExerciseInput): number => {
   if (exercise.type === 'strength') {
-    const volume = exercise.weight * exercise.reps * exercise.sets;
+    const volume = exercise.sets.reduce((total, set) => {
+      return total + set.weight * set.reps;
+    }, 0);
     return Math.max(1, Math.floor(volume / VOLUME_DIVISOR));
   }
   return FIXED_XP;
@@ -44,7 +47,7 @@ interface StatGain {
  * Aggregates XP gains per stat from a list of exercises.
  */
 export const calculateGains = (
-  exercises: SessionExercise[]
+  exercises: SessionExerciseInput[]
 ): Map<ExerciseType, StatGain> => {
   const gains = new Map<ExerciseType, StatGain>();
 

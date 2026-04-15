@@ -1,3 +1,4 @@
+import { SessionExercise } from './SessionExercise';
 /**
  * Session.ts — Training session data shape
  *
@@ -8,20 +9,12 @@
  * - stretch   → agility (stretching/flexibility exercises)
  */
 
-export type ExerciseType = 'strength' | 'cardio' | 'explosive' | 'stretch';
-
-export interface SessionExercise {
-  exerciseId: string;
-  name: string;
-  type: ExerciseType;
-  sets: number;
-  reps: number;
-  weight: number;
-}
-
 export interface Session {
   id: number;
   user_id: number;
+  routine_id?: number | null;
+  date: Date;
+  notes?: string | null;
   exercises: SessionExercise[];
   created_at: Date;
 }

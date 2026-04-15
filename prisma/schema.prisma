@@ -81,12 +81,40 @@ model Stats {
 model Session {
   id         Int      @id @default(autoincrement())
   user_id    Int
-  exercises  Json     @default("[]")
+  routine_id Int?
+  date       DateTime
+  notes      String?
   created_at DateTime @default(now())
 
-  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user      User              @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  exercises SessionExercise[]
 
   @@map("sessions")
+}
+
+model SessionExercise {
+  id              Int     @id @default(autoincrement())
+  session_id      Int
+  exercise_name   String
+  exercise_api_id String?
+  muscle_group    String
+
+  session Session?     @relation(fields: [session_id], references: [id], onDelete: Cascade)
+  sets    SessionSet[]
+
+  @@map("session_exercises")
+}
+
+model SessionSet {
+  id                  Int     @id @default(autoincrement())
+  session_exercise_id Int
+  set_number          Int
+  reps                Int
+  weight              Decimal
+
+  SessionExercise SessionExercise @relation(fields: [session_exercise_id], references: [id], onDelete: Cascade)
+
+  @@map("session_sets")
 }
 
 enum ConditionType {
