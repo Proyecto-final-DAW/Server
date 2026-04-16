@@ -42,11 +42,12 @@ function goalAdjustedCalories(
   goal: Goal
 ): number {
   switch (goal) {
-    case Goal.LOSE:
+    case Goal.LOSE_FAT:
       return totalDailyEnergyExpenditureKcal + LOSE_ADJUSTMENT_KCAL;
-    case Goal.GAIN:
+    case Goal.GAIN_MUSCLE:
       return totalDailyEnergyExpenditureKcal + GAIN_ADJUSTMENT_KCAL;
     case Goal.MAINTAIN:
+    case Goal.HEALTH:
       return totalDailyEnergyExpenditureKcal;
     default: {
       const _exhaustive: never = goal;
