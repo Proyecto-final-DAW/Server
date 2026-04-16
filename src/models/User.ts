@@ -1,4 +1,10 @@
-import type { Goal, Sex } from '@prisma/client';
+import type {
+  Equipment,
+  ExperienceLevel,
+  Goal,
+  Injury,
+  Sex,
+} from '@prisma/client';
 
 export interface User {
   id: number;
@@ -12,7 +18,11 @@ export interface User {
   weight?: number;
   height?: number;
   activity_level?: string;
-  goal?: Goal | null;
+  goals?: Goal[];
+  experience_level?: ExperienceLevel | null;
+  equipment?: Equipment | null;
+  days_per_week?: string | null;
+  injuries?: Injury[];
   sleep_hours?: number;
   daily_calories?: number;
   protein_grams?: number;
