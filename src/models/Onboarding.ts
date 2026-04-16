@@ -7,7 +7,15 @@ export type ActivityLevel =
 
 export type Goal = 'LOSE_FAT' | 'GAIN_MUSCLE' | 'MAINTAIN' | 'HEALTH';
 
-/** Request body for POST /onboarding; persisted on the authenticated user's row in `users`. */
+export type ExperienceLevel = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
+
+export type Equipment = 'FULL_GYM' | 'HOME_WEIGHTS' | 'BODYWEIGHT';
+
+export type DaysPerWeek = '2-3' | '4-5' | '6+';
+
+export type Injury = 'NONE' | 'KNEE' | 'BACK' | 'SHOULDER' | 'OTHER';
+
+/** Request body for PUT /onboarding; persisted on the authenticated user's row in `users`. */
 export interface OnboardingFormData {
   name: string;
   birthDate: string;
@@ -15,5 +23,9 @@ export interface OnboardingFormData {
   height: string;
   sex?: 'MALE' | 'FEMALE';
   activityLevel?: ActivityLevel;
-  goal?: Goal;
+  goals?: Goal[];
+  experienceLevel?: ExperienceLevel;
+  equipment?: Equipment;
+  daysPerWeek?: DaysPerWeek;
+  injuries?: Injury[];
 }

@@ -19,9 +19,30 @@ enum Sex {
 }
 
 enum Goal {
-  LOSE
-  GAIN
+  LOSE_FAT
+  GAIN_MUSCLE
   MAINTAIN
+  HEALTH
+}
+
+enum ExperienceLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum Equipment {
+  FULL_GYM
+  HOME_WEIGHTS
+  BODYWEIGHT
+}
+
+enum Injury {
+  NONE
+  KNEE
+  BACK
+  SHOULDER
+  OTHER
 }
 
 enum ExerciseType {
@@ -31,26 +52,30 @@ enum ExerciseType {
   STRETCH
 }
 model User {
-  id                   Int       @id @default(autoincrement())
-  name                 String    @db.VarChar(100)
-  email                String    @unique @db.VarChar(100)
-  hashed_password      String    @db.Text
-  tokens               String[]  @default([])
+  id                   Int              @id @default(autoincrement())
+  name                 String           @db.VarChar(100)
+  email                String           @unique @db.VarChar(100)
+  hashed_password      String           @db.Text
+  tokens               String[]         @default([])
   age                  Int?
-  birth_date           DateTime? @db.Date
+  birth_date           DateTime?        @db.Date
   sex                  Sex?
-  weight               Decimal?  @db.Decimal(4, 1)
-  height               Decimal?  @db.Decimal(4, 1)
-  activity_level       String?   @db.VarChar(100)
-  goal                 Goal?
+  weight               Decimal?         @db.Decimal(4, 1)
+  height               Decimal?         @db.Decimal(4, 1)
+  activity_level       String?          @db.VarChar(100)
+  goals                Goal[]           @default([])
+  experience_level     ExperienceLevel?
+  equipment            Equipment?
+  days_per_week        String?          @db.VarChar(10)
+  injuries             Injury[]         @default([])
   sleep_hours          Int?
   daily_calories       Int?
   protein_grams        Int?
   fat_grams            Int?
   carb_grams           Int?
-  onboarding_completed Boolean   @default(false)
-  created_at           DateTime  @default(now())
-  updated_at           DateTime  @default(now()) @updatedAt
+  onboarding_completed Boolean          @default(false)
+  created_at           DateTime         @default(now())
+  updated_at           DateTime         @default(now()) @updatedAt
 
   stats           Stats?
   sessions        Session[]
