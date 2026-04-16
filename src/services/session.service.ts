@@ -1,31 +1,9 @@
 import pool from '../db/pool';
+import { CreateSessionInput } from '../helpers/session.helper';
 import type { UnlockedMilestone } from '../models/Milestone';
-import { ExerciseType } from '../models/SessionExercise';
 import * as milestoneService from './milestone.service';
 import { applyGains, calculateGains } from './progression.service';
 import * as statsService from './stats.service';
-
-type SessionSetInput = {
-  set_number: number;
-  reps: number;
-  weight: number;
-};
-
-export type SessionExerciseInput = {
-  exercise_name: string;
-  exercise_api_id?: string | null;
-  muscle_group: string;
-  type: ExerciseType;
-  sets: SessionSetInput[];
-};
-
-type SessionInput = {
-  userId: number;
-  routineId?: number | null;
-  date: Date;
-  notes?: string | null;
-  exercises: SessionExerciseInput[];
-};
 
 const countUserSessions = async (userId: number): Promise<number> => {
   const result = await pool.query(
@@ -56,7 +34,7 @@ export const createSession = async ({
   date,
   notes = null,
   exercises,
-}: SessionInput) => {
+}: CreateSessionInput) => {
   const client = await pool.connect();
 
   try {
@@ -134,7 +112,7 @@ export const processSession = async ({
   date,
   notes = null,
   exercises,
-}: SessionInput) => {
+}: CreateSessionInput) => {
   const currentStats = await statsService.findByUserId(userId);
   if (!currentStats) {
     const error = new Error('Stats not initialized');

@@ -24,6 +24,12 @@ enum Goal {
   MAINTAIN
 }
 
+enum ExerciseType {
+  STRENGTH
+  CARDIO
+  EXPLOSIVE
+  STRETCH
+}
 model User {
   id                   Int       @id @default(autoincrement())
   name                 String    @db.VarChar(100)

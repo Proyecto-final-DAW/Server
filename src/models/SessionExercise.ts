@@ -1,6 +1,6 @@
 import { SessionSet } from './SessionSet';
 
-export type ExerciseType = 'strength' | 'cardio' | 'explosive' | 'stretch';
+export type ExerciseType = 'STRENGTH' | 'CARDIO' | 'EXPLOSIVE' | 'STRETCH';
 
 export interface SessionExercise {
   exerciseId: string;
