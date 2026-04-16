@@ -1,21 +1,21 @@
+import { SessionExerciseInput } from '../helpers/session.helper';
 import { ExerciseType } from '../models/SessionExercise';
-import { SessionExerciseInput } from './session.service';
 
 /**
  * Maps exercise types to their corresponding RPG stat columns.
  */
 const STAT_MAP: Record<ExerciseType, string> = {
-  strength: 'strength',
-  cardio: 'endurance',
-  explosive: 'stamina',
-  stretch: 'agility',
+  STRENGTH: 'strength',
+  CARDIO: 'endurance',
+  EXPLOSIVE: 'stamina',
+  STRETCH: 'agility',
 };
 
 const LEVEL_MAP: Record<ExerciseType, string> = {
-  strength: 'strength_level',
-  cardio: 'endurance_level',
-  explosive: 'stamina_level',
-  stretch: 'agility_level',
+  STRENGTH: 'strength_level',
+  CARDIO: 'endurance_level',
+  EXPLOSIVE: 'stamina_level',
+  STRETCH: 'agility_level',
 };
 
 const XP_THRESHOLD = 100;
@@ -28,7 +28,7 @@ const FIXED_XP = 15;
  * - Others: fixed points per exercise
  */
 const calculateExerciseXp = (exercise: SessionExerciseInput): number => {
-  if (exercise.type === 'strength') {
+  if (exercise.type === 'STRENGTH') {
     const volume = exercise.sets.reduce((total, set) => {
       return total + set.weight * set.reps;
     }, 0);
