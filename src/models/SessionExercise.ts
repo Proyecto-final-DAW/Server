@@ -3,7 +3,7 @@ import { SessionSet } from './SessionSet';
 export type ExerciseType = 'STRENGTH' | 'CARDIO' | 'EXPLOSIVE' | 'STRETCH';
 
 export interface SessionExercise {
-  exerciseId: string;
+  exerciseId: number;
   session_id: number;
   name: string;
   type: ExerciseType;

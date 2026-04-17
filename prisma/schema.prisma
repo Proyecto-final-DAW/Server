@@ -51,6 +51,7 @@ enum ExerciseType {
   EXPLOSIVE
   STRETCH
 }
+
 model User {
   id                   Int              @id @default(autoincrement())
   name                 String           @db.VarChar(100)
@@ -124,9 +125,10 @@ model Session {
 }
 
 model SessionExercise {
-  id              Int     @id @default(autoincrement())
+  id              Int          @id @default(autoincrement())
   session_id      Int
   exercise_name   String
+  type            ExerciseType
   exercise_api_id String?
   muscle_group    String
 
