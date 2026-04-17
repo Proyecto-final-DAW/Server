@@ -45,6 +45,14 @@ enum Injury {
   OTHER
 }
 
+enum TipType {
+  FIRST_WEEK
+  INACTIVE_3_DAYS
+  NEW_ACHIEVEMENT
+  HIGH_STREAK
+  GENERAL
+}
+
 model User {
   id                   Int              @id @default(autoincrement())
   name                 String           @db.VarChar(100)
@@ -145,4 +153,14 @@ model UserMilestone {
 
   @@unique([user_id, milestone_id])
   @@map("user_milestones")
+}
+
+model Tip {
+  id         Int      @id @default(autoincrement())
+  type       TipType
+  content    String
+  active     Boolean  @default(true)
+  created_at DateTime @default(now())
+
+  @@map("tips")
 }
