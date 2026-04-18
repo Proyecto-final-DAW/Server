@@ -11,7 +11,7 @@ export interface Tip {
   type: TipType;
   content: string;
   active: boolean;
-  created_at: Date;
+  created_at?: Date;
 }
 
 export type TipsByType = Record<TipType, Tip[]>;

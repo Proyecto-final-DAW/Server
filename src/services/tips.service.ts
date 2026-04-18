@@ -9,7 +9,6 @@ const tips: TipsByType = {
       type: TipType.FIRST_WEEK,
       content: 'Focus on building a simple routine during your first week.',
       active: true,
-      created_at: new Date(),
     },
   ],
   [TipType.INACTIVE_3_DAYS]: [
@@ -19,7 +18,6 @@ const tips: TipsByType = {
       content:
         'You have been inactive for a few days. Start again with a small step today.',
       active: true,
-      created_at: new Date(),
     },
   ],
   [TipType.NEW_ACHIEVEMENT]: [
@@ -29,7 +27,6 @@ const tips: TipsByType = {
       content:
         'Great job unlocking a new achievement! Keep the momentum going.',
       active: true,
-      created_at: new Date(),
     },
   ],
   [TipType.HIGH_STREAK]: [
@@ -38,7 +35,6 @@ const tips: TipsByType = {
       type: TipType.HIGH_STREAK,
       content: 'Amazing streak! Stay consistent and keep it sustainable.',
       active: true,
-      created_at: new Date(),
     },
   ],
   [TipType.GENERAL]: [
@@ -47,12 +43,14 @@ const tips: TipsByType = {
       type: TipType.GENERAL,
       content: 'Consistency beats intensity in the long run.',
       active: true,
-      created_at: new Date(),
     },
   ],
 };
 
 function pickRandomTip(items: Tip[]): Tip {
+  if (!items.length) {
+    throw new Error('No tips available');
+  }
   return items[Math.floor(Math.random() * items.length)];
 }
 
