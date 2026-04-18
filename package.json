@@ -36,7 +36,7 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
-    "@types/node": "^25.6.0",
+    "@types/node": "^25.2.1",
     "@types/pg": "^8.16.0",
     "@typescript-eslint/eslint-plugin": "^8.55.0",
     "@typescript-eslint/parser": "^8.55.0",
@@ -51,5 +51,10 @@
     "prisma": "^7.4.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "@hono/node-server": "1.19.13",
+    "hono": "4.12.14",
+    "lodash": "4.17.23"
   }
 }
