@@ -10,6 +10,7 @@ import exercisesRouter from './routes/exercises';
 import milestonesRouter from './routes/milestones';
 import onboardingRouter from './routes/onboarding';
 import profileRouter from './routes/profile';
+import routinesRouter from './routes/routines';
 import sessionsRouter from './routes/sessions';
 import statsRouter from './routes/stats';
 import usersRouter from './routes/users';
@@ -59,6 +60,7 @@ app.use('/onboarding', onboardingRouter);
 app.use('/sessions', sessionsRouter);
 app.use('/exercises', exercisesRouter);
 app.use('/milestones', milestonesRouter);
+app.use('/routines', routinesRouter);
 
 async function connectDatabase(): Promise<void> {
   const client = await pool.connect();
