@@ -1,8 +1,8 @@
-import type { Goal } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 import pool from '../db/pool';
 import { UserPublic } from '../models/User';
+import { resolveMacroInputs } from '../utils/macroProfile';
 import { calculateCalories } from './macros.service';
 
 const SALT_ROUNDS = 10;
@@ -26,14 +26,6 @@ const MACRO_TRIGGER_FIELDS = [
   'activity_level',
   'goals',
 ];
-
-const ACTIVITY_FACTOR_MAP: Record<string, number> = {
-  SEDENTARY: 1.2,
-  LIGHT: 1.375,
-  MODERATE: 1.55,
-  ACTIVE: 1.725,
-  VERY_ACTIVE: 1.9,
-};
 
 function throwCoded(message: string, code: string): never {
   const err = new Error(message);
@@ -110,22 +102,15 @@ export async function updateProfile(
   const needsRecalc = updatedColumns.some((f) =>
     MACRO_TRIGGER_FIELDS.includes(f)
   );
-  if (needsRecalc && canRecalcMacros(updatedUser)) {
-    const activityFactor = ACTIVITY_FACTOR_MAP[updatedUser.activity_level];
-    const primaryGoal = (updatedUser.goals as Goal[])[0];
-
-    if (!activityFactor || !primaryGoal) {
-      const { hashed_password: _, tokens: __, ...publicUser } = updatedUser;
-      return publicUser as UserPublic;
-    }
-
+  const inputs = needsRecalc ? resolveMacroInputs(updatedUser) : null;
+  if (inputs) {
     const macros = calculateCalories(
-      updatedUser.weight,
-      updatedUser.height,
-      updatedUser.age,
-      updatedUser.sex,
-      activityFactor,
-      primaryGoal
+      inputs.weightKg,
+      inputs.heightCm,
+      inputs.age,
+      inputs.sex,
+      inputs.activityFactor,
+      inputs.goal
     );
 
     const macroResult = await pool.query(
@@ -150,18 +135,6 @@ export async function updateProfile(
 
   const { hashed_password: _, tokens: __, ...publicUser } = updatedUser;
   return publicUser as UserPublic;
-}
-
-function canRecalcMacros(user: Record<string, unknown>): boolean {
-  return Boolean(
-    user.weight &&
-    user.height &&
-    user.age &&
-    user.sex &&
-    user.activity_level &&
-    Array.isArray(user.goals) &&
-    user.goals.length > 0
-  );
 }
 
 export async function changePassword(

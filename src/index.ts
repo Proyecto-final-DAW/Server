@@ -6,10 +6,12 @@ import cors from 'cors';
 import express from 'express';
 
 import pool from './db/pool';
+import dietRouter from './routes/diet';
 import exercisesRouter from './routes/exercises';
 import milestonesRouter from './routes/milestones';
 import onboardingRouter from './routes/onboarding';
 import profileRouter from './routes/profile';
+import progressRouter from './routes/progress';
 import sessionsRouter from './routes/sessions';
 import statsRouter from './routes/stats';
 import usersRouter from './routes/users';
@@ -59,6 +61,8 @@ app.use('/onboarding', onboardingRouter);
 app.use('/sessions', sessionsRouter);
 app.use('/exercises', exercisesRouter);
 app.use('/milestones', milestonesRouter);
+app.use('/progress', progressRouter);
+app.use('/diet', dietRouter);
 
 async function connectDatabase(): Promise<void> {
   const client = await pool.connect();
