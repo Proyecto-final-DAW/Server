@@ -17,6 +17,16 @@ interface JwtError extends Error {
     | 'SyntaxError';
 }
 
+function isLocalDevAuthBypass(): boolean {
+  return process.env.NODE_ENV === 'development';
+}
+
+function bearerToken(header: string | undefined): string | undefined {
+  if (!header?.startsWith('Bearer ')) return undefined;
+  const token = header.slice('Bearer '.length).trim();
+  return token.length > 0 ? token : undefined;
+}
+
 export const authentication = async (
   req: Request,
   res: Response,
@@ -24,10 +34,28 @@ export const authentication = async (
 ) => {
   try {
     const header = req.headers.authorization;
-    if (!header) {
-      return res.status(401).json({ message: 'No token provided' });
+    const token = bearerToken(header);
+
+    if (!token && isLocalDevAuthBypass()) {
+      const rawId = process.env.LOCAL_DEV_USER_ID ?? '1';
+      const devUserId = Number.parseInt(rawId, 10);
+      if (Number.isNaN(devUserId) || devUserId <= 0) {
+        return res
+          .status(500)
+          .json({ message: 'Invalid LOCAL_DEV_USER_ID for local auth bypass' });
+      }
+      const devUser = await userService.findById(devUserId);
+      if (!devUser) {
+        return res.status(401).json({
+          message:
+            'Local dev: user not found. Register a user or set LOCAL_DEV_USER_ID in .env',
+        });
+      }
+      const { hashed_password: _, tokens: __, ...publicUser } = devUser as User;
+      req.user = publicUser;
+      return next();
     }
-    const token = header.split(' ')[1];
+
     if (!token) {
       return res.status(401).json({ message: 'No token provided' });
     }

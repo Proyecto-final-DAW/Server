@@ -80,6 +80,7 @@ model User {
 
   stats           Stats?
   sessions        Session[]
+  routines        Routine[]
   user_milestones UserMilestone[]
 
   @@map("users")
@@ -132,7 +133,7 @@ model SessionExercise {
   exercise_api_id String?
   muscle_group    String
 
-  session Session?     @relation(fields: [session_id], references: [id], onDelete: Cascade)
+  session Session      @relation(fields: [session_id], references: [id], onDelete: Cascade)
   sets    SessionSet[]
 
   @@map("session_exercises")
@@ -145,9 +146,37 @@ model SessionSet {
   reps                Int
   weight              Decimal
 
-  SessionExercise SessionExercise @relation(fields: [session_exercise_id], references: [id], onDelete: Cascade)
+  session_exercise SessionExercise @relation(fields: [session_exercise_id], references: [id], onDelete: Cascade)
 
   @@map("session_sets")
+}
+
+model Routine {
+  id          Int      @id @default(autoincrement())
+  user_id     Int
+  name        String   @db.VarChar(100)
+  description String?  @db.Text
+  created_at  DateTime @default(now())
+  updated_at  DateTime @default(now()) @updatedAt
+
+  user      User              @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  exercises RoutineExercise[]
+
+  @@map("routines")
+}
+
+model RoutineExercise {
+  id              Int     @id @default(autoincrement())
+  routine_id      Int
+  exercise_api_id String  @db.VarChar(50)
+  exercise_name   String? @db.VarChar(200)
+  sets            Int?
+  reps            Int?
+  order_index     Int?
+
+  routine Routine @relation(fields: [routine_id], references: [id], onDelete: Cascade)
+
+  @@map("routine_exercises")
 }
 
 enum ConditionType {

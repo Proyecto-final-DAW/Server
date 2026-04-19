@@ -1,9 +1,10 @@
-import type { Goal } from '@prisma/client';
+import type { Goal, Sex } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 import pool from '../db/pool';
 import { UserPublic } from '../models/User';
 import { calculateCalories } from './macros.service';
+import { normalizeUserRow } from './user.service';
 
 const SALT_ROUNDS = 10;
 
@@ -57,7 +58,8 @@ export async function getProfileSummary(userId: number) {
     throwCoded('USER_NOT_FOUND', 'USER_NOT_FOUND');
   }
 
-  const { hashed_password: _, tokens: __, ...user } = userResult.rows[0];
+  const row = normalizeUserRow(userResult.rows[0] as Record<string, unknown>);
+  const { hashed_password: _, tokens: __, ...user } = row;
   const stats = statsResult.rows[0] ?? { streak: 0, best_streak: 0 };
   const totalSessions = sessionsResult.rows[0]?.total ?? 0;
 
@@ -105,14 +107,21 @@ export async function updateProfile(
     throwCoded('USER_NOT_FOUND', 'USER_NOT_FOUND');
   }
 
-  const updatedUser = result.rows[0];
+  const updatedUser = normalizeUserRow(
+    result.rows[0] as Record<string, unknown>
+  );
 
   const needsRecalc = updatedColumns.some((f) =>
     MACRO_TRIGGER_FIELDS.includes(f)
   );
   if (needsRecalc && canRecalcMacros(updatedUser)) {
-    const activityFactor = ACTIVITY_FACTOR_MAP[updatedUser.activity_level];
-    const primaryGoal = (updatedUser.goals as Goal[])[0];
+    const activityLevel = updatedUser.activity_level;
+    const activityFactor =
+      typeof activityLevel === 'string'
+        ? ACTIVITY_FACTOR_MAP[activityLevel]
+        : undefined;
+    const goals = updatedUser.goals as Goal[];
+    const primaryGoal = goals[0];
 
     if (!activityFactor || !primaryGoal) {
       const { hashed_password: _, tokens: __, ...publicUser } = updatedUser;
@@ -120,10 +129,10 @@ export async function updateProfile(
     }
 
     const macros = calculateCalories(
-      updatedUser.weight,
-      updatedUser.height,
-      updatedUser.age,
-      updatedUser.sex,
+      Number(updatedUser.weight),
+      Number(updatedUser.height),
+      Number(updatedUser.age),
+      updatedUser.sex as Sex,
       activityFactor,
       primaryGoal
     );
@@ -140,11 +149,10 @@ export async function updateProfile(
       ]
     );
 
-    const {
-      hashed_password: _,
-      tokens: __,
-      ...publicUser
-    } = macroResult.rows[0];
+    const macroRow = normalizeUserRow(
+      macroResult.rows[0] as Record<string, unknown>
+    );
+    const { hashed_password: _, tokens: __, ...publicUser } = macroRow;
     return publicUser as UserPublic;
   }
 

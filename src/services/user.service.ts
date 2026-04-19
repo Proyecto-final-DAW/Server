@@ -3,6 +3,47 @@ import type { Goal, Sex } from '@prisma/client';
 import pool from '../db/pool';
 import { calculateCalories } from './macros.service';
 
+/** `pg` returns enum arrays (e.g. `Goal[]`) as strings like `{LOSE_FAT}`. */
+function parsePgEnumArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((v) => String(v));
+  }
+  if (typeof value !== 'string') {
+    return [];
+  }
+  const trimmed = value.trim();
+  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) {
+    return [];
+  }
+  const inner = trimmed.slice(1, -1);
+  if (!inner) {
+    return [];
+  }
+  return inner.split(',').map((part) => {
+    const p = part.trim();
+    if (p.startsWith('"') && p.endsWith('"')) {
+      return p.slice(1, -1).replace(/""/g, '"');
+    }
+    return p;
+  });
+}
+
+export function normalizeUserRow<T extends Record<string, unknown> | undefined>(
+  row: T
+): T {
+  if (!row) {
+    return row;
+  }
+  const out = { ...row };
+  if ('goals' in out) {
+    (out as Record<string, unknown>).goals = parsePgEnumArray(out.goals);
+  }
+  if ('injuries' in out) {
+    (out as Record<string, unknown>).injuries = parsePgEnumArray(out.injuries);
+  }
+  return out;
+}
+
 export const createUser = async (
   name: string,
   email: string,
@@ -19,12 +60,12 @@ export const findByEmail = async (email: string) => {
   const result = await pool.query('SELECT * FROM users WHERE email = $1', [
     email,
   ]);
-  return result.rows[0];
+  return normalizeUserRow(result.rows[0]);
 };
 
 export const findById = async (id: number) => {
   const result = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
-  return result.rows[0];
+  return normalizeUserRow(result.rows[0]);
 };
 
 export const updateUser = async (id: number, data: Record<string, unknown>) => {
@@ -37,7 +78,7 @@ export const updateUser = async (id: number, data: Record<string, unknown>) => {
     `UPDATE users SET ${setClause} WHERE id = $${fields.length + 1} RETURNING *`,
     [...values, id]
   );
-  return result.rows[0];
+  return normalizeUserRow(result.rows[0]);
 };
 
 export interface NutritionProfileInput {
@@ -83,7 +124,7 @@ export const removeToken = async (userId: number, token: string) => {
     'UPDATE users SET tokens = array_remove(tokens, $1) WHERE id = $2 RETURNING *',
     [token, userId]
   );
-  return result.rows[0];
+  return normalizeUserRow(result.rows[0]);
 };
 
 export const hasToken = async (
