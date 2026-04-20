@@ -1,6 +1,12 @@
 /* eslint-disable no-console */
 import dotenv from 'dotenv';
-dotenv.config();
+
+const nodeEnv = process.env.NODE_ENV || 'development';
+dotenv.config({ path: '.env' });
+dotenv.config({
+  path: nodeEnv === 'production' ? '.env.production' : '.env.local',
+  override: true,
+});
 
 import cors from 'cors';
 import express from 'express';
@@ -32,9 +38,25 @@ if (missingVars.length > 0) {
 
 const app = express();
 
+const corsOriginEnv = process.env.CORS_ORIGIN || 'http://localhost:5173';
+const allowAnyOrigin = corsOriginEnv.trim() === '*';
+const allowedOrigins = corsOriginEnv
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
 app.use(
   cors({
-    origin: 'http://localhost:5173',
+    origin: (origin, callback) => {
+      if (allowAnyOrigin) return callback(null, true);
+
+      // Allow non-browser clients / same-origin requests with no Origin header.
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+
+      return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
     credentials: true,
   })
 );
