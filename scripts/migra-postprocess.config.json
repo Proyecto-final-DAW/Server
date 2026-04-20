@@ -3,13 +3,14 @@
     {
       "schema": "public",
       "table": "users",
-      "column": "goal",
+      "column": "goals",
       "enum": "Goal",
       "onUnknown": "null",
       "valueMap": {
-        "LOSE": ["LOSE", "LOSE_FAT", "LOSE WEIGHT", "WEIGHT_LOSS"],
-        "GAIN": ["GAIN", "GAIN_MUSCLE", "MUSCLE_GAIN", "BUILD"],
-        "MAINTAIN": ["MAINTAIN", "MAINTENANCE", "KEEP"]
+        "LOSE_FAT": ["LOSE_FAT", "LOSE", "LOSE WEIGHT", "WEIGHT_LOSS"],
+        "GAIN_MUSCLE": ["GAIN_MUSCLE", "GAIN", "MUSCLE_GAIN", "BUILD"],
+        "MAINTAIN": ["MAINTAIN", "MAINTENANCE", "KEEP"],
+        "HEALTH": ["HEALTH", "WELLNESS"]
       }
     },
     {
@@ -21,6 +22,44 @@
       "valueMap": {
         "MALE": ["MALE", "M", "MAN", "HOMBRE"],
         "FEMALE": ["FEMALE", "F", "WOMAN", "MUJER"]
+      }
+    },
+    {
+      "schema": "public",
+      "table": "users",
+      "column": "experience_level",
+      "enum": "ExperienceLevel",
+      "onUnknown": "null",
+      "valueMap": {
+        "BEGINNER": ["BEGINNER", "NOVICE"],
+        "INTERMEDIATE": ["INTERMEDIATE"],
+        "ADVANCED": ["ADVANCED", "EXPERT"]
+      }
+    },
+    {
+      "schema": "public",
+      "table": "users",
+      "column": "equipment",
+      "enum": "Equipment",
+      "onUnknown": "null",
+      "valueMap": {
+        "FULL_GYM": ["FULL_GYM", "GYM"],
+        "HOME_WEIGHTS": ["HOME_WEIGHTS", "HOME"],
+        "BODYWEIGHT": ["BODYWEIGHT", "NONE"]
+      }
+    },
+    {
+      "schema": "public",
+      "table": "users",
+      "column": "injuries",
+      "enum": "Injury",
+      "onUnknown": "null",
+      "valueMap": {
+        "NONE": ["NONE"],
+        "KNEE": ["KNEE"],
+        "BACK": ["BACK"],
+        "SHOULDER": ["SHOULDER"],
+        "OTHER": ["OTHER"]
       }
     }
   ],

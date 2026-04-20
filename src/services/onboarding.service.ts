@@ -1,13 +1,20 @@
 import pool from '../db/pool';
 import { OnboardingFormData } from '../models/Onboarding';
 import { UserPublic } from '../models/User';
+import { normalizeUserRow } from './user.service';
 
 /** Maps onboarding request fields to `users` columns (single source of truth). */
 function applyFormToUserUpdates(
   formData: OnboardingFormData,
-  fields: string[],
+  setParts: string[],
   values: unknown[]
 ): void {
+  const push = (column: string, value: unknown, cast?: string): void => {
+    values.push(value);
+    const ph = `$${values.length}`;
+    setParts.push(`${column} = ${cast ? `${ph}::${cast}` : ph}`);
+  };
+
   (Object.entries(formData) as [keyof OnboardingFormData, unknown][]).forEach(
     ([key, raw]) => {
       if (raw === undefined || raw === '') {
@@ -17,48 +24,49 @@ function applyFormToUserUpdates(
       switch (key) {
         case 'name': {
           const trimmed = String(raw).trim();
-          if (trimmed) {
-            fields.push('name');
-            values.push(trimmed);
-          }
+          if (trimmed) push('name', trimmed);
           break;
         }
         case 'birthDate': {
           const date = new Date(String(raw));
-          if (!Number.isNaN(date.getTime())) {
-            fields.push('birth_date');
-            values.push(date);
-          }
+          if (!Number.isNaN(date.getTime())) push('birth_date', date);
           break;
         }
         case 'weight': {
           const n = Number(raw);
-          if (!Number.isNaN(n)) {
-            fields.push('weight');
-            values.push(n);
-          }
+          if (!Number.isNaN(n)) push('weight', n);
           break;
         }
         case 'height': {
           const n = Number(raw);
-          if (!Number.isNaN(n)) {
-            fields.push('height');
-            values.push(n);
-          }
+          if (!Number.isNaN(n)) push('height', n);
           break;
         }
         case 'sex':
-          fields.push('sex');
-          values.push(raw);
+          push('sex', raw, '"Sex"');
           break;
         case 'activityLevel':
-          fields.push('activity_level');
-          values.push(raw);
+          push('activity_level', raw);
           break;
-        case 'goal':
-          fields.push('goal');
-          values.push(raw);
+        case 'goals': {
+          const arr = Array.isArray(raw) ? raw : [];
+          push('goals', arr, '"Goal"[]');
           break;
+        }
+        case 'experienceLevel':
+          push('experience_level', raw, '"ExperienceLevel"');
+          break;
+        case 'equipment':
+          push('equipment', raw, '"Equipment"');
+          break;
+        case 'daysPerWeek':
+          push('days_per_week', raw);
+          break;
+        case 'injuries': {
+          const arr = Array.isArray(raw) ? raw : [];
+          push('injuries', arr, '"Injury"[]');
+          break;
+        }
         default:
           break;
       }
@@ -87,13 +95,13 @@ export const submitOnboarding = async (
     throw err;
   }
 
-  const fields: string[] = ['onboarding_completed'];
+  const setParts: string[] = ['onboarding_completed = $1'];
   const values: unknown[] = [true];
 
-  applyFormToUserUpdates(formData, fields, values);
+  applyFormToUserUpdates(formData, setParts, values);
 
-  const setClause = fields.map((field, i) => `${field} = $${i + 1}`).join(', ');
-  const idPlaceholder = fields.length + 1;
+  const setClause = setParts.join(', ');
+  const idPlaceholder = values.length + 1;
 
   const result = await pool.query(
     `UPDATE users SET ${setClause}, updated_at = NOW() WHERE id = $${idPlaceholder} AND NOT (onboarding_completed IS TRUE) RETURNING *`,
@@ -101,7 +109,8 @@ export const submitOnboarding = async (
   );
 
   if (result.rows[0]) {
-    const { hashed_password: _hp, tokens: _tokens, ...user } = result.rows[0];
+    const row = normalizeUserRow(result.rows[0] as Record<string, unknown>);
+    const { hashed_password: _hp, tokens: _tokens, ...user } = row;
     return user as UserPublic;
   }
 
