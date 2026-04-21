@@ -1,8 +1,8 @@
-import type { Goal, Sex } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 import pool from '../db/pool';
 import { UserPublic } from '../models/User';
+import { resolveMacroInputs } from '../utils/macroProfile';
 import { calculateCalories } from './macros.service';
 import { normalizeUserRow } from './user.service';
 
@@ -27,14 +27,6 @@ const MACRO_TRIGGER_FIELDS = [
   'activity_level',
   'goals',
 ];
-
-const ACTIVITY_FACTOR_MAP: Record<string, number> = {
-  SEDENTARY: 1.2,
-  LIGHT: 1.375,
-  MODERATE: 1.55,
-  ACTIVE: 1.725,
-  VERY_ACTIVE: 1.9,
-};
 
 function throwCoded(message: string, code: string): never {
   const err = new Error(message);
@@ -114,27 +106,15 @@ export async function updateProfile(
   const needsRecalc = updatedColumns.some((f) =>
     MACRO_TRIGGER_FIELDS.includes(f)
   );
-  if (needsRecalc && canRecalcMacros(updatedUser)) {
-    const activityLevel = updatedUser.activity_level;
-    const activityFactor =
-      typeof activityLevel === 'string'
-        ? ACTIVITY_FACTOR_MAP[activityLevel]
-        : undefined;
-    const goals = updatedUser.goals as Goal[];
-    const primaryGoal = goals[0];
-
-    if (!activityFactor || !primaryGoal) {
-      const { hashed_password: _, tokens: __, ...publicUser } = updatedUser;
-      return publicUser as UserPublic;
-    }
-
+  const inputs = needsRecalc ? resolveMacroInputs(updatedUser) : null;
+  if (inputs) {
     const macros = calculateCalories(
-      Number(updatedUser.weight),
-      Number(updatedUser.height),
-      Number(updatedUser.age),
-      updatedUser.sex as Sex,
-      activityFactor,
-      primaryGoal
+      inputs.weightKg,
+      inputs.heightCm,
+      inputs.age,
+      inputs.sex,
+      inputs.activityFactor,
+      inputs.goal
     );
 
     const macroResult = await pool.query(
@@ -158,18 +138,6 @@ export async function updateProfile(
 
   const { hashed_password: _, tokens: __, ...publicUser } = updatedUser;
   return publicUser as UserPublic;
-}
-
-function canRecalcMacros(user: Record<string, unknown>): boolean {
-  return Boolean(
-    user.weight &&
-    user.height &&
-    user.age &&
-    user.sex &&
-    user.activity_level &&
-    Array.isArray(user.goals) &&
-    user.goals.length > 0
-  );
 }
 
 export async function changePassword(
