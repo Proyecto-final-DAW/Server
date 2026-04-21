@@ -14,6 +14,14 @@ export interface MacroTargets {
   carb_grams: number;
 }
 
+export const ACTIVITY_FACTOR_MAP: Record<string, number> = {
+  SEDENTARY: 1.2,
+  LIGHT: 1.375,
+  MODERATE: 1.55,
+  ACTIVE: 1.725,
+  VERY_ACTIVE: 1.9,
+};
+
 const PROTEIN_G_PER_KG = 2;
 const FAT_CALORIE_SHARE = 0.25;
 const LOSE_ADJUSTMENT_KCAL = -500;
