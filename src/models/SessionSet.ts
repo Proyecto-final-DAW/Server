@@ -3,5 +3,5 @@ export interface SessionSet {
   session_exercise_id: number;
   set_number: number;
   reps: number;
-  weight: number;
+  weight: string;
 }

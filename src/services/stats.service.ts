@@ -1,3 +1,5 @@
+import type { PoolClient } from 'pg';
+
 import pool from '../db/pool';
 import { calculateStreak } from './streak.service';
 
@@ -9,8 +11,9 @@ export const createStats = async (userId: number) => {
   return result.rows[0];
 };
 
-export const findByUserId = async (userId: number) => {
-  const result = await pool.query('SELECT * FROM stats WHERE user_id = $1', [
+export const findByUserId = async (userId: number, client?: PoolClient) => {
+  const db = client ?? pool;
+  const result = await db.query('SELECT * FROM stats WHERE user_id = $1', [
     userId,
   ]);
   return result.rows[0];
@@ -18,14 +21,16 @@ export const findByUserId = async (userId: number) => {
 
 export const updateStats = async (
   userId: number,
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
+  client?: PoolClient
 ) => {
+  const db = client ?? pool;
   const fields = Object.keys(data);
   const values = Object.values(data);
 
   const setClause = fields.map((field, i) => `${field} = $${i + 1}`).join(', ');
 
-  const result = await pool.query(
+  const result = await db.query(
     `UPDATE stats SET ${setClause}, updated_at = NOW() WHERE user_id = $${fields.length + 1} RETURNING *`,
     [...values, userId]
   );

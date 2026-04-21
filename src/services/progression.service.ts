@@ -1,4 +1,4 @@
-import { SessionExerciseInput } from '../helpers/session.helper';
+import { SessionExerciseInput } from './session.validator';
 import { ExerciseType } from '../models/SessionExercise';
 
 /**
