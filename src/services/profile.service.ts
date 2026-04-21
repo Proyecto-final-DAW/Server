@@ -4,6 +4,7 @@ import pool from '../db/pool';
 import { UserPublic } from '../models/User';
 import { resolveMacroInputs } from '../utils/macroProfile';
 import { calculateCalories } from './macros.service';
+import { normalizeUserRow } from './user.service';
 
 const SALT_ROUNDS = 10;
 
@@ -49,7 +50,8 @@ export async function getProfileSummary(userId: number) {
     throwCoded('USER_NOT_FOUND', 'USER_NOT_FOUND');
   }
 
-  const { hashed_password: _, tokens: __, ...user } = userResult.rows[0];
+  const row = normalizeUserRow(userResult.rows[0] as Record<string, unknown>);
+  const { hashed_password: _, tokens: __, ...user } = row;
   const stats = statsResult.rows[0] ?? { streak: 0, best_streak: 0 };
   const totalSessions = sessionsResult.rows[0]?.total ?? 0;
 
@@ -97,7 +99,9 @@ export async function updateProfile(
     throwCoded('USER_NOT_FOUND', 'USER_NOT_FOUND');
   }
 
-  const updatedUser = result.rows[0];
+  const updatedUser = normalizeUserRow(
+    result.rows[0] as Record<string, unknown>
+  );
 
   const needsRecalc = updatedColumns.some((f) =>
     MACRO_TRIGGER_FIELDS.includes(f)
@@ -125,11 +129,10 @@ export async function updateProfile(
       ]
     );
 
-    const {
-      hashed_password: _,
-      tokens: __,
-      ...publicUser
-    } = macroResult.rows[0];
+    const macroRow = normalizeUserRow(
+      macroResult.rows[0] as Record<string, unknown>
+    );
+    const { hashed_password: _, tokens: __, ...publicUser } = macroRow;
     return publicUser as UserPublic;
   }
 
