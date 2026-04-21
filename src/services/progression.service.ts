@@ -1,5 +1,5 @@
-import { SessionExerciseInput } from './session.validator';
 import { ExerciseType } from '../models/SessionExercise';
+import { SessionExerciseInput } from './session.validator';
 
 /**
  * Maps exercise types to their corresponding RPG stat columns.
