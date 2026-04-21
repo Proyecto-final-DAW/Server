@@ -1,13 +1,12 @@
 import { Response } from 'express';
 
-import {
-  WEIGHT_HISTORY_DEFAULT_LIMIT,
-  WEIGHT_HISTORY_MAX_LIMIT,
-  WEIGHT_KG_MAX,
-  WEIGHT_KG_MIN,
-} from '../constants/limits';
 import * as progressService from '../services/progress.service';
 import { AuthRequest } from './UserController';
+
+const WEIGHT_KG_MIN = 20;
+const WEIGHT_KG_MAX = 400;
+const WEIGHT_HISTORY_DEFAULT_LIMIT = 100;
+const WEIGHT_HISTORY_MAX_LIMIT = 500;
 
 const ProgressController = {
   async getWeightHistory(req: AuthRequest, res: Response) {
@@ -24,24 +23,28 @@ const ProgressController = {
 
       let parsedLimit = WEIGHT_HISTORY_DEFAULT_LIMIT;
       if (limit !== undefined) {
-        const n = Number(limit);
-        if (!Number.isInteger(n) || n <= 0 || n > WEIGHT_HISTORY_MAX_LIMIT) {
+        const parsedLimitNum = Number(limit);
+        if (
+          !Number.isInteger(parsedLimitNum) ||
+          parsedLimitNum <= 0 ||
+          parsedLimitNum > WEIGHT_HISTORY_MAX_LIMIT
+        ) {
           return res.status(400).json({
             message: `limit must be an integer between 1 and ${WEIGHT_HISTORY_MAX_LIMIT}`,
           });
         }
-        parsedLimit = n;
+        parsedLimit = parsedLimitNum;
       }
 
       let parsedBefore: Date | undefined;
       if (before !== undefined) {
-        const d = new Date(before);
-        if (isNaN(d.getTime())) {
+        const parsedDate = new Date(before);
+        if (isNaN(parsedDate.getTime())) {
           return res
             .status(400)
             .json({ message: 'Invalid "before" date. Use YYYY-MM-DD.' });
         }
-        parsedBefore = d;
+        parsedBefore = parsedDate;
       }
 
       const history = await progressService.getWeightHistory(userId, {
@@ -114,9 +117,9 @@ const ProgressController = {
       );
       return res.status(200).json(history);
     } catch (err: unknown) {
-      const e = err as Error & { code?: string };
+      const error = err as Error & { code?: string };
       // Postgres raises 22023 ("invalid_parameter_value") for unknown time zones
-      if (e.code === '22023') {
+      if (error.code === '22023') {
         return res.status(400).json({ message: 'Invalid tz query parameter' });
       }
       return res
