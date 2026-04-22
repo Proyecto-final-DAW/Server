@@ -1,6 +1,6 @@
-import { SessionSet } from './SessionSet';
+import { ExerciseType } from '@prisma/client';
 
-export type ExerciseType = 'STRENGTH' | 'CARDIO' | 'EXPLOSIVE' | 'STRETCH';
+import { SessionSet } from './SessionSet';
 
 export interface SessionExercise {
   id: number;

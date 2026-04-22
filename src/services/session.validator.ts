@@ -16,9 +16,16 @@ export type SessionExerciseInput = {
 
 export type CreateSessionBody = {
   routineId?: number | null;
-  date: string;
+  date?: unknown;
   notes?: string | null;
-  exercises: unknown;
+  exercises?: unknown;
+};
+
+export type ValidatedCreateSessionBody = {
+  routineId: number | null;
+  date: string;
+  notes: string | null;
+  exercises: SessionExerciseInput[];
 };
 
 export type CreateSessionServiceInput = {
@@ -28,6 +35,10 @@ export type CreateSessionServiceInput = {
   notes?: string | null;
   exercises: SessionExerciseInput[];
 };
+
+type ValidationResult =
+  | { ok: true; data: ValidatedCreateSessionBody }
+  | { ok: false; error: string };
 
 const MAX_EXERCISE_NAME_LENGTH = 200;
 const MAX_MUSCLE_GROUP_LENGTH = 100;
@@ -98,44 +109,58 @@ export const isValidExercise = (
   );
 };
 
-export const getSessionValidationError = ({
-  routineId,
-  date,
-  notes,
-  exercises,
-}: {
-  routineId?: number | null;
-  date?: unknown;
-  notes?: string | null;
-  exercises?: unknown;
-}): string | null => {
+export const validateCreateSessionBody = (
+  body: Partial<CreateSessionBody>
+): ValidationResult => {
+  const { routineId, date, notes, exercises } = body;
+
   if (
     routineId !== undefined &&
     routineId !== null &&
     typeof routineId !== 'number'
   ) {
-    return 'routineId must be a number or null';
+    return { ok: false, error: 'routineId must be a number or null' };
   }
 
   if (!isValidDate(date)) {
-    return 'A valid date is required';
+    return { ok: false, error: 'A valid date is required' };
   }
 
   if (notes !== undefined && notes !== null && typeof notes !== 'string') {
-    return 'notes must be a string or null';
+    return { ok: false, error: 'notes must be a string or null' };
   }
 
   if (typeof notes === 'string' && notes.length > MAX_NOTES_LENGTH) {
-    return `notes must be at most ${MAX_NOTES_LENGTH} characters`;
+    return {
+      ok: false,
+      error: `notes must be at most ${MAX_NOTES_LENGTH} characters`,
+    };
   }
 
   if (!Array.isArray(exercises) || exercises.length === 0) {
-    return 'Exercises array is required and cannot be empty';
+    return {
+      ok: false,
+      error: 'Exercises array is required and cannot be empty',
+    };
   }
 
   if (!exercises.every(isValidExercise)) {
-    return `Each exercise must include exercise_name (max ${MAX_EXERCISE_NAME_LENGTH}), a valid type, optional exercise_api_id, muscle_group (max ${MAX_MUSCLE_GROUP_LENGTH}), and a non-empty sets array with set_number, reps and weight`;
+    return {
+      ok: false,
+      error:
+        `Each exercise must include exercise_name (max ${MAX_EXERCISE_NAME_LENGTH}), ` +
+        `a valid type, optional exercise_api_id, muscle_group (max ${MAX_MUSCLE_GROUP_LENGTH}), ` +
+        'and a non-empty sets array with set_number, reps and weight',
+    };
   }
 
-  return null;
+  return {
+    ok: true,
+    data: {
+      routineId: routineId ?? null,
+      date,
+      notes: notes ?? null,
+      exercises,
+    },
+  };
 };

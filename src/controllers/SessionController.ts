@@ -4,12 +4,12 @@ import * as sessionService from '../services/session.service';
 import {
   CreateSessionBody,
   CreateSessionServiceInput,
-  SessionExerciseInput,
-  getSessionValidationError,
+  validateCreateSessionBody,
 } from '../services/session.validator';
 import { AuthRequest } from './UserController';
 
 const SessionController = {
+  // TODO(PROJ-123): Add getAll / getById endpoints for sessions (follow-up task)
   async create(req: AuthRequest, res: Response) {
     try {
       const userId = req.user?.id;
@@ -28,32 +28,20 @@ const SessionController = {
         });
       }
 
-      const { routineId, date, notes, exercises } =
-        req.body as Partial<CreateSessionBody>;
+      const validation = validateCreateSessionBody(
+        req.body as Partial<CreateSessionBody>
+      );
 
-      const validationError = getSessionValidationError({
-        routineId,
-        date,
-        notes,
-        exercises,
-      });
-
-      if (validationError) {
-        return res.status(400).json({ message: validationError });
-      }
-
-      if (typeof date !== 'string' || !Array.isArray(exercises)) {
-        return res.status(400).json({
-          message: 'Invalid session payload',
-        });
+      if (!validation.ok) {
+        return res.status(400).json({ message: validation.error });
       }
 
       const sessionInput: CreateSessionServiceInput = {
         userId,
-        routineId: routineId ?? null,
-        date: new Date(date),
-        notes: notes ?? null,
-        exercises: exercises as SessionExerciseInput[],
+        routineId: validation.data.routineId,
+        date: new Date(validation.data.date),
+        notes: validation.data.notes,
+        exercises: validation.data.exercises,
       };
 
       const sessionResult = await sessionService.processSession(sessionInput);

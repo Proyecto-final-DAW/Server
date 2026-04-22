@@ -1,4 +1,5 @@
-import { ExerciseType } from '../models/SessionExercise';
+import { ExerciseType } from '@prisma/client';
+
 import { SessionExerciseInput } from './session.validator';
 
 /**
@@ -24,7 +25,7 @@ const FIXED_XP = 15;
 
 /**
  * Calculates XP earned by a single exercise.
- * - Strength: volume-based (weight × reps × sets / 100), min 1
+ * - Strength: volume-based (Σ(set.weight × set.reps) / 100), min 1
  * - Others: fixed points per exercise
  */
 const calculateExerciseXp = (exercise: SessionExerciseInput): number => {

@@ -2,53 +2,16 @@ import type { PoolClient } from 'pg';
 
 import pool from '../db/pool';
 import type { UnlockedMilestone } from '../models/Milestone';
+import {
+  CreateSessionData,
+  SessionRow,
+  SessionExerciseRow,
+  SessionSetRow,
+  CreatedSessionGraph,
+} from '../models/SessionTypes';
 import * as milestoneService from './milestone.service';
 import { applyGains, calculateGains } from './progression.service';
-import type { SessionExerciseInput } from './session.validator';
 import * as statsService from './stats.service';
-
-type CreateSessionData = {
-  userId: number;
-  routineId?: number | null;
-  date: Date;
-  notes?: string | null;
-  exercises: SessionExerciseInput[];
-};
-
-type SessionRow = {
-  id: number;
-  user_id: number;
-  routine_id: number | null;
-  date: Date;
-  notes: string | null;
-  created_at: Date;
-};
-
-type SessionExerciseRow = {
-  id: number;
-  session_id: number;
-  exercise_name: string;
-  type: string;
-  exercise_api_id: string | null;
-  muscle_group: string;
-};
-
-type SessionSetRow = {
-  id: number;
-  session_exercise_id: number;
-  set_number: number;
-  reps: number;
-  weight: string | number;
-};
-
-type CreatedSessionGraph = {
-  session: SessionRow;
-  exercises: Array<
-    SessionExerciseRow & {
-      sets: SessionSetRow[];
-    }
-  >;
-};
 
 const countUserSessions = async (userId: number): Promise<number> => {
   const result = await pool.query(
@@ -80,6 +43,23 @@ const createSessionTx = async (
   client: PoolClient,
   { userId, routineId = null, date, notes = null, exercises }: CreateSessionData
 ): Promise<CreatedSessionGraph> => {
+  if (routineId !== null) {
+    const routineResult = await client.query<{ id: number }>(
+      `
+        SELECT id
+        FROM routines
+        WHERE id = $1 AND user_id = $2
+      `,
+      [routineId, userId]
+    );
+
+    if (routineResult.rowCount === 0) {
+      const error = new Error('Routine not found');
+      (error as Error & { code: string }).code = 'ROUTINE_NOT_FOUND';
+      throw error;
+    }
+  }
+
   const sessionResult = await client.query<SessionRow>(
     `
       INSERT INTO sessions (user_id, routine_id, date, notes)
@@ -132,11 +112,8 @@ const createSessionTx = async (
 
   const setValues: Array<number | string> = [];
   const setPlaceholders: string[] = [];
-  const exerciseIndexById = new Map<number, number>();
 
   insertedExercises.forEach((insertedExercise, exerciseIndex) => {
-    exerciseIndexById.set(insertedExercise.id, exerciseIndex);
-
     const originalExercise = exercises[exerciseIndex];
 
     originalExercise.sets.forEach((set) => {
@@ -324,8 +301,10 @@ export const processSession = async ({
     }
 
     return {
-      session: created.session,
-      exercises: created.exercises,
+      session: {
+        ...created.session,
+        exercises: created.exercises,
+      },
       stats: updatedStats,
       newMilestones,
     };
