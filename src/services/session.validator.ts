@@ -3,7 +3,7 @@ import { ExerciseType } from '@prisma/client';
 export type SessionSetInput = {
   set_number: number;
   reps: number;
-  weight: number;
+  weight: string;
 };
 
 export type SessionExerciseInput = {

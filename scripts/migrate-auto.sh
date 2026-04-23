@@ -17,12 +17,30 @@ if [ -z "$MIGRATION_NAME" ]; then
 fi
 
 # Load environment variables
-if [ -f .env ]; then
-  export $(cat .env | tr -d '\r' | grep -v '^#' | xargs)
+ENV_FILE=""
+
+# Prefer local/dev overrides, then production, then generic.
+if [ -f .env.local ]; then
+  ENV_FILE=".env.local"
+elif [ -f .env.production ]; then
+  ENV_FILE=".env.production"
+elif [ -f .env ]; then
+  ENV_FILE=".env"
+fi
+
+if [ -n "$ENV_FILE" ]; then
+  # shellcheck disable=SC1090
+  set -a
+  source "$ENV_FILE"
+  set +a
 fi
 
 if [ -z "$DATABASE_URL" ]; then
-  echo "❌ DATABASE_URL is not set in .env"
+  if [ -n "$ENV_FILE" ]; then
+    echo "❌ DATABASE_URL is not set (checked $ENV_FILE)"
+  else
+    echo "❌ DATABASE_URL is not set (no .env.local/.env.production/.env found)"
+  fi
   exit 1
 fi
 
@@ -124,7 +142,7 @@ fi
 echo "📝 Creating migration: $MIGRATION_NAME..."
 npx dbmate new "$MIGRATION_NAME"
 
-MIGRATION_FILE=$(ls -t db/migrations/*${MIGRATION_NAME}*.sql 2> /dev/null | head -1)
+MIGRATION_FILE=$(ls -t db/migrations/${MIGRATION_NAME}.sql 2> /dev/null | head -1)
 
 if [ -z "$MIGRATION_FILE" ]; then
   echo "❌ Could not find migration file"
@@ -261,14 +279,19 @@ $DOWN_SQL
 EOF
 
 echo "✅ Migration generated automatically: $MIGRATION_FILE"
-echo ""
-echo "📋 migrate:up"
-echo "$UP_SQL"
-echo ""
-echo "📋 migrate:down"
-echo "$DOWN_SQL"
-echo ""
-echo "⚠️  IMPORTANT: Review both sections before applying!"
-echo "💡 Apply with: npm run db:migrate"
+if [ "$VERBOSE" = "1" ]; then
+  echo ""
+  echo "📋 migrate:up"
+  echo "$UP_SQL"
+  echo ""
+  echo "📋 migrate:down"
+  echo "$DOWN_SQL"
+  echo ""
+  echo "⚠️  IMPORTANT: Review both sections before applying!"
+  echo "💡 Apply with: npm run db:migrate"
+else
+  echo "ℹ️  SQL output suppressed. Review file: $MIGRATION_FILE"
+  echo "💡 To print SQL to console: VERBOSE=1 npm run db:migrate:generate $MIGRATION_NAME"
+fi
 
 node scripts/db-helper.mjs drop-db "$TEMP_DB_NAME" 2> /dev/null || true
