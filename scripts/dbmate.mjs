@@ -18,6 +18,8 @@ if (args.length === 0) {
 const result = spawnSync('dbmate', args, {
   stdio: 'inherit',
   env: process.env,
+  // Needed on Windows so Node resolves the .cmd shim in node_modules/.bin.
+  shell: true,
 });
 
 process.exit(result.status ?? 1);
