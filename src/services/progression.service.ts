@@ -31,10 +31,16 @@ const FIXED_XP = 15;
 const calculateExerciseXp = (exercise: SessionExerciseInput): number => {
   if (exercise.type === 'STRENGTH') {
     const volume = exercise.sets.reduce((total, set) => {
-      return total + set.weight * set.reps;
+      const weight = parseFloat(set.weight);
+
+      if (isNaN(weight)) return total;
+
+      return total + weight * set.reps;
     }, 0);
+
     return Math.max(1, Math.floor(volume / VOLUME_DIVISOR));
   }
+
   return FIXED_XP;
 };
 
