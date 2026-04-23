@@ -14,6 +14,9 @@ async function connectDatabase(): Promise<void> {
 const PORT = process.env.PORT || 3000;
 
 async function startServer() {
+  // createApp() loads dotenv (.env + .env.local/.env.production)
+  const app = createApp();
+
   try {
     await connectDatabase();
     console.log('✅ Database connected successfully');
@@ -22,7 +25,6 @@ async function startServer() {
     process.exit(1);
   }
 
-  const app = createApp();
   app.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
   });

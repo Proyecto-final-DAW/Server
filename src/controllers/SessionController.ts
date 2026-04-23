@@ -63,7 +63,10 @@ const SessionController = {
           .status(404)
           .json({ message: 'Stats not found. Complete onboarding first.' });
       }
-      return res.status(500).json({ message: 'Failed to create session' });
+      return res.status(500).json({
+        message: 'Failed to create session',
+        error: typedError?.message || String(error),
+      });
     }
   },
 };
