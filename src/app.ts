@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 import cors from 'cors';
 import dotenv from 'dotenv';
-import express from 'express';
+import express, { NextFunction, Request, Response } from 'express';
 
 import { sanitizeRequest } from './middlewares/sanitize';
 import dietRouter from './routes/diet';
@@ -69,13 +69,7 @@ export function createApp() {
     })
   );
 
-  app.use(express.json());
-  app.use(
-    sanitizeRequest({
-      ignoreKeys: ['password'],
-    })
-  );
-
+  // Request logger (must run before body parsing to log 413s too)
   app.use((req, res, next) => {
     const start = Date.now();
     res.on('finish', () => {
@@ -87,6 +81,28 @@ export function createApp() {
     next();
   });
 
+  const requestBodyLimit = process.env.REQUEST_BODY_LIMIT ?? '100kb';
+  const urlencodedBodyLimit = process.env.URLENCODED_BODY_LIMIT ?? '25kb';
+
+  app.use(
+    express.json({
+      limit: requestBodyLimit,
+      strict: true,
+    })
+  );
+  app.use(
+    express.urlencoded({
+      extended: false,
+      limit: urlencodedBodyLimit,
+      parameterLimit: 1000,
+    })
+  );
+  app.use(
+    sanitizeRequest({
+      ignoreKeys: ['password'],
+    })
+  );
+
   app.use('/users', usersRouter);
   app.use('/profile', profileRouter);
   app.use('/stats', statsRouter);
@@ -97,6 +113,31 @@ export function createApp() {
   app.use('/progress', progressRouter);
   app.use('/diet', dietRouter);
   app.use('/routines', routinesRouter);
+
+  // Payload-too-large handler (body-parser / express.json)
+  app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
+    if (
+      err &&
+      typeof err === 'object' &&
+      ('type' in err || 'status' in err || 'statusCode' in err)
+    ) {
+      const maybe = err as {
+        type?: string;
+        status?: number;
+        statusCode?: number;
+      };
+      const status = maybe.statusCode ?? maybe.status;
+      if (status === 413 || maybe.type === 'entity.too.large') {
+        console.warn(
+          `[payload] 413 entity.too.large (json=${requestBodyLimit}, urlencoded=${urlencodedBodyLimit})`
+        );
+        return res.status(413).json({
+          message: 'Payload too large',
+        });
+      }
+    }
+    return next(err);
+  });
 
   return app;
 }
