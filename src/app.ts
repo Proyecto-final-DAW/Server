@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import express, { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 
+import { httpLogger } from './middlewares/httpLogger';
 import { globalRateLimit } from './middlewares/rateLimitGlobal';
 import { sanitizeRequest } from './middlewares/sanitize';
 import { globalSlowdown } from './middlewares/slowdownGlobal';
@@ -82,17 +83,7 @@ export function createApp() {
     })
   );
 
-  // Request logger (must run before body parsing to log 413s too)
-  app.use((req, res, next) => {
-    const start = Date.now();
-    res.on('finish', () => {
-      const duration = Date.now() - start;
-      console.log(
-        `${req.method} ${req.originalUrl} ${res.statusCode} - ${duration}ms`
-      );
-    });
-    next();
-  });
+  app.use(httpLogger);
 
   // Soft-throttle first, then hard-limit with 429.
   app.use(globalSlowdown);
