@@ -2,6 +2,7 @@
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express, { NextFunction, Request, Response } from 'express';
+import helmet from 'helmet';
 
 import { globalRateLimit } from './middlewares/rateLimitGlobal';
 import { sanitizeRequest } from './middlewares/sanitize';
@@ -68,6 +69,16 @@ export function createApp() {
         return callback(new Error(`CORS blocked for origin: ${origin}`));
       },
       credentials: true,
+    })
+  );
+
+  // Basic security headers.
+  app.disable('x-powered-by');
+  app.use(
+    helmet({
+      // This is an API; CSP is usually set by the frontend/CDN.
+      contentSecurityPolicy: false,
+      crossOriginEmbedderPolicy: false,
     })
   );
 
