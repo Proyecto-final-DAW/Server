@@ -25,6 +25,86 @@ const getTotalWeightLifted = async (userId: number): Promise<number> => {
   return result.rows[0].total;
 };
 
+export interface WeeklyMetrics {
+  daysTrained: number;
+  totalExercises: number;
+  totalVolume: number;
+}
+
+export interface WeeklySummary {
+  current: WeeklyMetrics;
+  previous: WeeklyMetrics;
+}
+
+const EMPTY_WEEK: WeeklyMetrics = {
+  daysTrained: 0,
+  totalExercises: 0,
+  totalVolume: 0,
+};
+
+interface WeeklyMetricsRow {
+  bucket: 'current' | 'previous';
+  days_trained: number;
+  total_exercises: number;
+  total_volume: number;
+}
+
+export const getWeeklySummary = async (
+  userId: number
+): Promise<WeeklySummary> => {
+  const result = await pool.query<WeeklyMetricsRow>(
+    `WITH bounds AS (
+       SELECT
+         date_trunc('week', NOW()) AS current_start,
+         date_trunc('week', NOW()) - INTERVAL '1 week' AS previous_start,
+         date_trunc('week', NOW()) + INTERVAL '1 week' AS next_start
+     ),
+     session_metrics AS (
+       SELECT
+         s.created_at,
+         DATE(s.created_at) AS session_date,
+         (
+           SELECT COALESCE(SUM(
+             (elem->>'weight')::numeric * (elem->>'reps')::int * (elem->>'sets')::int
+           ), 0)
+           FROM jsonb_array_elements(s.exercises::jsonb) AS elem
+         ) AS volume,
+         jsonb_array_length(s.exercises::jsonb) AS exercise_count
+       FROM sessions s, bounds b
+       WHERE s.user_id = $1
+         AND s.created_at >= b.previous_start
+         AND s.created_at < b.next_start
+     )
+     SELECT
+       CASE
+         WHEN sm.created_at >= b.current_start THEN 'current'
+         ELSE 'previous'
+       END AS bucket,
+       COUNT(DISTINCT sm.session_date)::int AS days_trained,
+       COALESCE(SUM(sm.exercise_count), 0)::int AS total_exercises,
+       COALESCE(SUM(sm.volume), 0)::int AS total_volume
+     FROM session_metrics sm, bounds b
+     GROUP BY bucket`,
+    [userId]
+  );
+
+  const summary: WeeklySummary = {
+    current: { ...EMPTY_WEEK },
+    previous: { ...EMPTY_WEEK },
+  };
+
+  for (const row of result.rows) {
+    const metrics: WeeklyMetrics = {
+      daysTrained: row.days_trained,
+      totalExercises: row.total_exercises,
+      totalVolume: row.total_volume,
+    };
+    summary[row.bucket] = metrics;
+  }
+
+  return summary;
+};
+
 export const createSession = async (
   userId: number,
   exercises: SessionExercise[]
