@@ -75,6 +75,7 @@ export const authentication = async (
 
     const { hashed_password: _, tokens: __, ...publicUser } = user as User;
     req.user = publicUser;
+    res.setHeader('x-auth-token', token);
     next();
   } catch (error: unknown) {
     if (error && typeof error === 'object' && 'name' in error) {
