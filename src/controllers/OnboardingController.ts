@@ -21,16 +21,19 @@ const OnboardingController = {
 
       return res.status(200).json(updatedUser);
     } catch (err: unknown) {
-      const e = err as Error & { code?: string };
-      if (e.code === 'USER_NOT_FOUND') {
+      const error = err as Error & { code?: string };
+      if (error.code === 'USER_NOT_FOUND') {
         return res.status(404).json({ message: 'User not found' });
       }
-      if (e.code === 'ONBOARDING_ALREADY_COMPLETED') {
+      if (error.code === 'ONBOARDING_ALREADY_COMPLETED') {
         return res
           .status(409)
           .json({ message: 'Onboarding already completed' });
       }
-      return res.status(500).json({ message: 'Failed to update onboarding' });
+      return res.status(500).json({
+        message: 'Failed to update onboarding',
+        error: error?.message || String(err),
+      });
     }
   },
 };

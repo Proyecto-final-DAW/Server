@@ -10,6 +10,7 @@
     "start": "npm run db:migrate && npm run build && NODE_ENV=production node dist/index.js",
     "format": "prettier --write . && npm run db:prisma:format",
     "lint": "eslint .",
+    "fix": "prettier --write \"src/**/*.{js,jsx,ts,tsx,json,css}\" && eslint . --fix",
     "test": "echo \"Error: no test specified\" && exit 1",
     "db:migrate": "node ./scripts/dbmate.mjs up",
     "db:migrate:down": "node ./scripts/dbmate.mjs down",
@@ -29,7 +30,8 @@
     "dotenv": "^17.2.4",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
-    "pg": "^8.18.0"
+    "pg": "^8.18.0",
+    "serverless-http": "^4.0.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -45,6 +47,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-perfectionist": "^5.5.0",
     "eslint-plugin-prettier": "^5.5.5",
+    "netlify-cli": "^25.4.0",
     "prettier": "^3.8.1",
     "prettier-plugin-sh": "^0.18.0",
     "prettier-plugin-sql": "^0.18.0",

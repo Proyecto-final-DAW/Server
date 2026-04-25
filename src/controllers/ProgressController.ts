@@ -52,8 +52,12 @@ const ProgressController = {
         before: parsedBefore,
       });
       return res.status(200).json(history);
-    } catch {
-      return res.status(500).json({ message: 'Failed to get weight history' });
+    } catch (err: unknown) {
+      const error = err as Error & { code?: string };
+      return res.status(500).json({
+        message: 'Failed to get weight history',
+        error: error?.message || String(err),
+      });
     }
   },
 
@@ -90,8 +94,12 @@ const ProgressController = {
         entryDate
       );
       return res.status(201).json(entry);
-    } catch {
-      return res.status(500).json({ message: 'Failed to register weight' });
+    } catch (err: unknown) {
+      const error = err as Error & { code?: string };
+      return res.status(500).json({
+        message: 'Failed to register weight',
+        error: error?.message || String(err),
+      });
     }
   },
 
@@ -122,9 +130,10 @@ const ProgressController = {
       if (error.code === '22023') {
         return res.status(400).json({ message: 'Invalid tz query parameter' });
       }
-      return res
-        .status(500)
-        .json({ message: 'Failed to get exercise history' });
+      return res.status(500).json({
+        message: 'Failed to get exercise history',
+        error: error?.message || String(err),
+      });
     }
   },
 };
