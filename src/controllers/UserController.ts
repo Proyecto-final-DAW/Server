@@ -28,11 +28,14 @@ const UserController = {
       });
       return res.status(201).json(user);
     } catch (err: unknown) {
-      const e = err as Error & { code?: string };
-      if (e.code === 'EMAIL_IN_USE') {
+      const error = err as Error & { code?: string };
+      if (error.code === 'EMAIL_IN_USE') {
         return res.status(409).json({ message: 'Email already in use' });
       }
-      return res.status(500).json({ message: 'Registration failed' });
+      return res.status(500).json({
+        message: 'Registration failed',
+        error: error?.message || String(err),
+      });
     }
   },
 
@@ -53,12 +56,15 @@ const UserController = {
       });
       return res.status(200).json(result);
     } catch (err: unknown) {
-      const e = err as Error & { code?: string };
+      const error = err as Error & { code?: string };
 
-      if (e.code === 'INVALID_CREDENTIALS') {
+      if (error.code === 'INVALID_CREDENTIALS') {
         return res.status(401).json({ message: 'Invalid email or password' });
       }
-      return res.status(500).json({ message: 'Login failed' });
+      return res.status(500).json({
+        message: 'Login failed',
+        error: error?.message || String(err),
+      });
     }
   },
 
@@ -84,11 +90,14 @@ const UserController = {
         return res.status(200).json({ message: 'Goodbye!' });
       }
     } catch (err: unknown) {
-      const e = err as Error & { code?: string };
-      if (e.code === 'TOKEN_INVALID' || e.code === 'USER_NOT_FOUND') {
+      const error = err as Error & { code?: string };
+      if (error.code === 'TOKEN_INVALID' || error.code === 'USER_NOT_FOUND') {
         return res.status(401).json({ message: 'Token invalid or logged out' });
       }
-      return res.status(500).json({ message: 'Logout failed' });
+      return res.status(500).json({
+        message: 'Logout failed',
+        error: error?.message || String(err),
+      });
     }
   },
 };

@@ -89,9 +89,15 @@ export const authentication = async (
         case 'SyntaxError':
           return res.status(401).json({ message: 'Malformed token' });
         default:
-          return res.status(500).json({ message: 'Authentication error' });
+          return res.status(500).json({
+            message: 'Authentication error',
+            error: err?.message || String(error),
+          });
       }
     }
-    return res.status(500).json({ message: 'Unknown token error' });
+    return res.status(500).json({
+      message: 'Unknown token error',
+      error: String(error),
+    });
   }
 };

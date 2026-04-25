@@ -19,8 +19,12 @@ const StatsController = {
       }
 
       return res.status(200).json(stats);
-    } catch {
-      return res.status(500).json({ message: 'Failed to get stats' });
+    } catch (err: unknown) {
+      const error = err as Error & { code?: string };
+      return res.status(500).json({
+        message: 'Failed to get stats',
+        error: error?.message || String(err),
+      });
     }
   },
 
@@ -66,8 +70,12 @@ const StatsController = {
       }
 
       return res.status(200).json(updated);
-    } catch {
-      return res.status(500).json({ message: 'Failed to update stats' });
+    } catch (err: unknown) {
+      const error = err as Error & { code?: string };
+      return res.status(500).json({
+        message: 'Failed to update stats',
+        error: error?.message || String(err),
+      });
     }
   },
 
@@ -100,8 +108,12 @@ const StatsController = {
         last_session_date: result.stats.last_session_date,
         changed: result.changed,
       });
-    } catch {
-      return res.status(500).json({ message: 'Failed to register session' });
+    } catch (err: unknown) {
+      const error = err as Error & { code?: string };
+      return res.status(500).json({
+        message: 'Failed to register session',
+        error: error?.message || String(err),
+      });
     }
   },
 
@@ -119,8 +131,12 @@ const StatsController = {
 
       const stats = await statsService.createStats(userId);
       return res.status(201).json(stats);
-    } catch {
-      return res.status(500).json({ message: 'Failed to initialize stats' });
+    } catch (err: unknown) {
+      const error = err as Error & { code?: string };
+      return res.status(500).json({
+        message: 'Failed to initialize stats',
+        error: error?.message || String(err),
+      });
     }
   },
 };

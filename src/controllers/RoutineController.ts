@@ -57,8 +57,12 @@ const RoutineController = {
         });
       }
       return res.status(200).json(routines);
-    } catch {
-      return res.status(500).json({ message: 'Failed to get routines' });
+    } catch (err: unknown) {
+      const error = err as Error & { code?: string };
+      return res.status(500).json({
+        message: 'Failed to get routines',
+        error: error?.message || String(err),
+      });
     }
   },
 
@@ -82,8 +86,12 @@ const RoutineController = {
       }
 
       return res.status(200).json(routine);
-    } catch {
-      return res.status(500).json({ message: 'Failed to get routine' });
+    } catch (err: unknown) {
+      const error = err as Error & { code?: string };
+      return res.status(500).json({
+        message: 'Failed to get routine',
+        error: error?.message || String(err),
+      });
     }
   },
 
@@ -122,8 +130,12 @@ const RoutineController = {
       });
 
       return res.status(201).json(routine);
-    } catch {
-      return res.status(500).json({ message: 'Failed to create routine' });
+    } catch (err: unknown) {
+      const error = err as Error & { code?: string };
+      return res.status(500).json({
+        message: 'Failed to create routine',
+        error: error?.message || String(err),
+      });
     }
   },
 
@@ -181,8 +193,12 @@ const RoutineController = {
       }
 
       return res.status(200).json(updated);
-    } catch {
-      return res.status(500).json({ message: 'Failed to update routine' });
+    } catch (err: unknown) {
+      const error = err as Error & { code?: string };
+      return res.status(500).json({
+        message: 'Failed to update routine',
+        error: error?.message || String(err),
+      });
     }
   },
 
@@ -206,8 +222,12 @@ const RoutineController = {
       }
 
       return res.status(200).json({ message: 'Routine deleted' });
-    } catch {
-      return res.status(500).json({ message: 'Failed to delete routine' });
+    } catch (err: unknown) {
+      const error = err as Error & { code?: string };
+      return res.status(500).json({
+        message: 'Failed to delete routine',
+        error: error?.message || String(err),
+      });
     }
   },
 };
