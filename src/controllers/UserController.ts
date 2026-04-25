@@ -26,6 +26,7 @@ const UserController = {
         email: email.trim(),
         password,
       });
+      res.setHeader('x-auth-token', user.token);
       return res.status(201).json(user);
     } catch (err: unknown) {
       const error = err as Error & { code?: string };
@@ -54,6 +55,7 @@ const UserController = {
         email: email.trim(),
         password,
       });
+      res.setHeader('x-auth-token', result.token);
       return res.status(200).json(result);
     } catch (err: unknown) {
       const error = err as Error & { code?: string };
