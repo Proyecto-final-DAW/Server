@@ -24,8 +24,12 @@ const ExercisesController = {
       );
 
       return res.status(200).json(result);
-    } catch {
-      return res.status(500).json({ message: 'Failed to fetch exercises' });
+    } catch (err: unknown) {
+      const error = err as Error & { code?: string };
+      return res.status(500).json({
+        message: 'Failed to fetch exercises',
+        error: error?.message || String(err),
+      });
     }
   },
 
