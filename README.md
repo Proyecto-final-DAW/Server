@@ -67,7 +67,7 @@ Base URL: `http://localhost:<PORT>` (JSON bodies; `Content-Type: application/jso
 
 | Method | Path                   | Auth         | Description                                   |
 | ------ | ---------------------- | ------------ | --------------------------------------------- |
-| POST   | `/users/auth/register` | —            | Register `{ name, email, password }`          |
+| POST   | `/users/auth/register` | —            | Register `{ name, email, password }` → returns `token` (auto-login) |
 | POST   | `/users/auth/login`    | —            | Login `{ email, password }` → returns `token` |
 | POST   | `/users/auth/logout`   | Bearer token | Invalidates current session token             |
 
