@@ -8,6 +8,8 @@ import {
   registerBruteforceProtection,
 } from '../middlewares/bruteforce';
 import { ensureSelf } from '../middlewares/ensureSelf';
+import { validateBody } from '../middlewares/validate';
+import { loginSchema, registerSchema } from '../validators/auth';
 
 const router = express.Router();
 
@@ -15,9 +17,15 @@ const router = express.Router();
 router.post(
   '/auth/register',
   registerBruteforceProtection,
+  validateBody(registerSchema),
   UserController.register
 );
-router.post('/auth/login', loginBruteforceProtection, UserController.login);
+router.post(
+  '/auth/login',
+  loginBruteforceProtection,
+  validateBody(loginSchema),
+  UserController.login
+);
 router.post('/auth/logout', authentication, UserController.logout);
 
 router.post(

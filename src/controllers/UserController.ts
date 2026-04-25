@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import { UserPublic } from '../models/User';
 import * as authService from '../services/auth.service';
 import * as userService from '../services/user.service';
+import type { LoginBody, RegisterBody } from '../validators/auth';
 
 export interface AuthRequest extends Request {
   user?: UserPublic;
@@ -11,19 +12,10 @@ export interface AuthRequest extends Request {
 const UserController = {
   async register(req: Request, res: Response) {
     try {
-      const { name, email, password } = req.body as {
-        name?: string;
-        email?: string;
-        password?: string;
-      };
-      if (!name?.trim() || !email?.trim() || !password) {
-        return res.status(400).json({
-          message: 'Name, email and password are required',
-        });
-      }
+      const { name, email, password } = req.body as RegisterBody;
       const user = await authService.register({
-        name: name.trim(),
-        email: email.trim(),
+        name,
+        email,
         password,
       });
       res.setHeader('x-auth-token', user.token);
@@ -42,17 +34,9 @@ const UserController = {
 
   async login(req: Request, res: Response) {
     try {
-      const { email, password } = req.body as {
-        email?: string;
-        password?: string;
-      };
-      if (!email?.trim() || !password) {
-        return res.status(400).json({
-          message: 'Email and password are required',
-        });
-      }
+      const { email, password } = req.body as LoginBody;
       const result = await authService.login({
-        email: email.trim(),
+        email,
         password,
       });
       res.setHeader('x-auth-token', result.token);
