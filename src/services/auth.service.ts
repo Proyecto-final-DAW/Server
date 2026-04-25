@@ -22,7 +22,35 @@ interface LoginResponse {
   token: string;
 }
 
-export async function register(data: RegisterBody): Promise<UserPublic> {
+function buildLoginResponse(user: {
+  id: number;
+  email: string;
+  hashed_password?: string;
+  tokens?: string[];
+}): LoginResponse {
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret) {
+    throw new Error('JWT_SECRET is not configured');
+  }
+
+  const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
+  const token = jwt.sign({ userId: user.id, email: user.email }, jwtSecret, {
+    expiresIn,
+  } as jwt.SignOptions);
+
+  const {
+    hashed_password: _,
+    tokens: __,
+    ...publicUser
+  } = user as unknown as {
+    hashed_password?: string;
+    tokens?: string[];
+  } & UserPublic;
+
+  return { user: publicUser as UserPublic, token };
+}
+
+export async function register(data: RegisterBody): Promise<LoginResponse> {
   const existing = await userService.findByEmail(data.email);
   if (existing) {
     const err = new Error('EMAIL_IN_USE');
@@ -35,7 +63,11 @@ export async function register(data: RegisterBody): Promise<UserPublic> {
     data.email,
     hashedPassword
   );
-  return user as UserPublic;
+  const result = buildLoginResponse(user as { id: number; email: string });
+
+  await userService.addToken((user as { id: number }).id, result.token);
+
+  return result;
 }
 
 export async function login(data: LoginBody): Promise<LoginResponse> {
@@ -61,17 +93,9 @@ export async function login(data: LoginBody): Promise<LoginResponse> {
     throw new Error('JWT_SECRET is not configured');
   }
 
-  const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
-  const token = jwt.sign({ userId: user.id, email: user.email }, jwtSecret, {
-    expiresIn,
-  } as jwt.SignOptions);
+  const result = buildLoginResponse(user as { id: number; email: string });
 
-  // Save the token in the database
-  await userService.addToken(user.id, token);
+  await userService.addToken(user.id, result.token);
 
-  const { hashed_password: _, tokens: __, ...publicUser } = user;
-  return {
-    user: publicUser as UserPublic,
-    token,
-  };
+  return result;
 }

@@ -42,14 +42,22 @@ CREATE DATABASE gymapp OWNER gymuser;
 ## 3. Install and run
 
 ```bash
-cp .env.example .env
-# Edit .env: set JWT_SECRET (and EXERCISEDB_API_KEY if needed)
+cp .env.local.example .env.local
+# Edit .env.local: set JWT_SECRET (and EXERCISEDB_API_KEY if needed)
 npm install
 npm run db:migrate # apply migrations
 npm run dev
 ```
 
-The server listens on `http://localhost:${PORT}` (see `.env`). On start it logs a successful database connection or exits if it cannot connect.
+The server listens on `http://localhost:${PORT}` (see `.env.local`). On start it logs a successful database connection or exits if it cannot connect.
+
+### Environment files
+
+- **Development**: `.env.local` (see `.env.local.example`)
+- **Production**: `.env.production` (see `.env.production.example`)
+- **Optional base file**: `.env` (shared defaults; loaded first)
+
+The DB migrations run via dbmate and require `DATABASE_URL`. `npm run db:migrate` loads the same env files as the server.
 
 ## API (overview)
 
@@ -57,11 +65,11 @@ Base URL: `http://localhost:<PORT>` (JSON bodies; `Content-Type: application/jso
 
 ### Auth (`/users`)
 
-| Method | Path                   | Auth         | Description                                   |
-| ------ | ---------------------- | ------------ | --------------------------------------------- |
-| POST   | `/users/auth/register` | —            | Register `{ name, email, password }`          |
-| POST   | `/users/auth/login`    | —            | Login `{ email, password }` → returns `token` |
-| POST   | `/users/auth/logout`   | Bearer token | Invalidates current session token             |
+| Method | Path                   | Auth         | Description                                                         |
+| ------ | ---------------------- | ------------ | ------------------------------------------------------------------- |
+| POST   | `/users/auth/register` | —            | Register `{ name, email, password }` → returns `token` (auto-login) |
+| POST   | `/users/auth/login`    | —            | Login `{ email, password }` → returns `token`                       |
+| POST   | `/users/auth/logout`   | Bearer token | Invalidates current session token                                   |
 
 ### Macros / nutrition (`/users`)
 
@@ -143,3 +151,7 @@ Open a PR → review → merge.
 
 - [MIGRATIONS.md](./MIGRATIONS.md) — End-to-end migration workflow, migra filters, enum post-processing, commands
 - [scripts/README.md](./scripts/README.md) — `migrate-auto.sh`, `db-helper.mjs`, `postprocess-migra-sql.mjs`, config JSON
+
+## License
+
+**All rights reserved.** No permission is granted to use, copy, modify, or distribute this software without prior written permission. See [LICENSE](./LICENSE).

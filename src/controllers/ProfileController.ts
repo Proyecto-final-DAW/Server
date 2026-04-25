@@ -14,11 +14,14 @@ const ProfileController = {
       const profile = await profileService.getProfileSummary(userId);
       return res.status(200).json(profile);
     } catch (err: unknown) {
-      const e = err as Error & { code?: string };
-      if (e.code === 'USER_NOT_FOUND') {
+      const error = err as Error & { code?: string };
+      if (error.code === 'USER_NOT_FOUND') {
         return res.status(404).json({ message: 'User not found' });
       }
-      return res.status(500).json({ message: 'Failed to get profile' });
+      return res.status(500).json({
+        message: 'Failed to get profile',
+        error: error?.message || String(err),
+      });
     }
   },
 
@@ -36,14 +39,17 @@ const ProfileController = {
       if (err instanceof RangeError) {
         return res.status(400).json({ message: err.message });
       }
-      const e = err as Error & { code?: string };
-      if (e.code === 'USER_NOT_FOUND') {
+      const error = err as Error & { code?: string };
+      if (error.code === 'USER_NOT_FOUND') {
         return res.status(404).json({ message: 'User not found' });
       }
-      if (e.code === 'NO_FIELDS_TO_UPDATE') {
+      if (error.code === 'NO_FIELDS_TO_UPDATE') {
         return res.status(400).json({ message: 'No valid fields to update' });
       }
-      return res.status(500).json({ message: 'Failed to update profile' });
+      return res.status(500).json({
+        message: 'Failed to update profile',
+        error: error?.message || String(err),
+      });
     }
   },
 
@@ -68,21 +74,24 @@ const ProfileController = {
       await profileService.changePassword(userId, currentPassword, newPassword);
       return res.status(200).json({ message: 'Password updated successfully' });
     } catch (err: unknown) {
-      const e = err as Error & { code?: string };
-      if (e.code === 'USER_NOT_FOUND') {
+      const error = err as Error & { code?: string };
+      if (error.code === 'USER_NOT_FOUND') {
         return res.status(404).json({ message: 'User not found' });
       }
-      if (e.code === 'INVALID_PASSWORD') {
+      if (error.code === 'INVALID_PASSWORD') {
         return res
           .status(401)
           .json({ message: 'Current password is incorrect' });
       }
-      if (e.code === 'PASSWORD_TOO_SHORT') {
+      if (error.code === 'PASSWORD_TOO_SHORT') {
         return res
           .status(400)
           .json({ message: 'New password must be at least 6 characters' });
       }
-      return res.status(500).json({ message: 'Failed to change password' });
+      return res.status(500).json({
+        message: 'Failed to change password',
+        error: error?.message || String(err),
+      });
     }
   },
 };

@@ -1,6 +1,7 @@
 import pool from '../db/pool';
 import { OnboardingFormData } from '../models/Onboarding';
 import { UserPublic } from '../models/User';
+import { normalizeUserRow } from './user.service';
 
 /** Maps onboarding request fields to `users` columns (single source of truth). */
 function applyFormToUserUpdates(
@@ -108,7 +109,8 @@ export const submitOnboarding = async (
   );
 
   if (result.rows[0]) {
-    const { hashed_password: _hp, tokens: _tokens, ...user } = result.rows[0];
+    const row = normalizeUserRow(result.rows[0] as Record<string, unknown>);
+    const { hashed_password: _hp, tokens: _tokens, ...user } = row;
     return user as UserPublic;
   }
 

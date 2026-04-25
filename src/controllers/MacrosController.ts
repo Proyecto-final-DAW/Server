@@ -83,10 +83,14 @@ const MacrosController = {
 
       return res.status(200).json({ targets });
     } catch (err: unknown) {
+      const error = err as Error & { code?: string };
       if (err instanceof RangeError) {
         return res.status(400).json({ message: err.message });
       }
-      return res.status(500).json({ message: 'Failed to calculate macros' });
+      return res.status(500).json({
+        message: 'Failed to calculate macros',
+        error: error?.message || String(err),
+      });
     }
   },
 };

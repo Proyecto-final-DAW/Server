@@ -1,9 +1,10 @@
-import type { Goal } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 import pool from '../db/pool';
 import { UserPublic } from '../models/User';
+import { resolveMacroInputs } from '../utils/macroProfile';
 import { calculateCalories } from './macros.service';
+import { normalizeUserRow } from './user.service';
 
 const SALT_ROUNDS = 10;
 
@@ -27,14 +28,6 @@ const MACRO_TRIGGER_FIELDS = [
   'goals',
 ];
 
-const ACTIVITY_FACTOR_MAP: Record<string, number> = {
-  SEDENTARY: 1.2,
-  LIGHT: 1.375,
-  MODERATE: 1.55,
-  ACTIVE: 1.725,
-  VERY_ACTIVE: 1.9,
-};
-
 function throwCoded(message: string, code: string): never {
   const err = new Error(message);
   (err as Error & { code: string }).code = code;
@@ -57,7 +50,8 @@ export async function getProfileSummary(userId: number) {
     throwCoded('USER_NOT_FOUND', 'USER_NOT_FOUND');
   }
 
-  const { hashed_password: _, tokens: __, ...user } = userResult.rows[0];
+  const row = normalizeUserRow(userResult.rows[0] as Record<string, unknown>);
+  const { hashed_password: _, tokens: __, ...user } = row;
   const stats = statsResult.rows[0] ?? { streak: 0, best_streak: 0 };
   const totalSessions = sessionsResult.rows[0]?.total ?? 0;
 
@@ -105,27 +99,22 @@ export async function updateProfile(
     throwCoded('USER_NOT_FOUND', 'USER_NOT_FOUND');
   }
 
-  const updatedUser = result.rows[0];
+  const updatedUser = normalizeUserRow(
+    result.rows[0] as Record<string, unknown>
+  );
 
   const needsRecalc = updatedColumns.some((f) =>
     MACRO_TRIGGER_FIELDS.includes(f)
   );
-  if (needsRecalc && canRecalcMacros(updatedUser)) {
-    const activityFactor = ACTIVITY_FACTOR_MAP[updatedUser.activity_level];
-    const primaryGoal = (updatedUser.goals as Goal[])[0];
-
-    if (!activityFactor || !primaryGoal) {
-      const { hashed_password: _, tokens: __, ...publicUser } = updatedUser;
-      return publicUser as UserPublic;
-    }
-
+  const inputs = needsRecalc ? resolveMacroInputs(updatedUser) : null;
+  if (inputs) {
     const macros = calculateCalories(
-      updatedUser.weight,
-      updatedUser.height,
-      updatedUser.age,
-      updatedUser.sex,
-      activityFactor,
-      primaryGoal
+      inputs.weightKg,
+      inputs.heightCm,
+      inputs.age,
+      inputs.sex,
+      inputs.activityFactor,
+      inputs.goal
     );
 
     const macroResult = await pool.query(
@@ -140,28 +129,15 @@ export async function updateProfile(
       ]
     );
 
-    const {
-      hashed_password: _,
-      tokens: __,
-      ...publicUser
-    } = macroResult.rows[0];
+    const macroRow = normalizeUserRow(
+      macroResult.rows[0] as Record<string, unknown>
+    );
+    const { hashed_password: _, tokens: __, ...publicUser } = macroRow;
     return publicUser as UserPublic;
   }
 
   const { hashed_password: _, tokens: __, ...publicUser } = updatedUser;
   return publicUser as UserPublic;
-}
-
-function canRecalcMacros(user: Record<string, unknown>): boolean {
-  return Boolean(
-    user.weight &&
-    user.height &&
-    user.age &&
-    user.sex &&
-    user.activity_level &&
-    Array.isArray(user.goals) &&
-    user.goals.length > 0
-  );
 }
 
 export async function changePassword(
