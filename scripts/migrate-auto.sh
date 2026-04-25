@@ -16,13 +16,19 @@ if [ -z "$MIGRATION_NAME" ]; then
   exit 1
 fi
 
-# Load environment variables
-if [ -f .env ]; then
-  export $(cat .env | tr -d '\r' | grep -v '^#' | xargs)
+# Load environment variables (same convention as src/app.ts and scripts/dbmate.mjs)
+NODE_ENV=${NODE_ENV:-development}
+ENV_FILE=".env.local"
+if [ "$NODE_ENV" = "production" ]; then
+  ENV_FILE=".env.production"
+fi
+
+if [ -f "$ENV_FILE" ]; then
+  export $(cat "$ENV_FILE" | tr -d '\r' | grep -v '^#' | xargs)
 fi
 
 if [ -z "$DATABASE_URL" ]; then
-  echo "❌ DATABASE_URL is not set in .env"
+  echo "❌ DATABASE_URL is not set in $ENV_FILE"
   exit 1
 fi
 

@@ -76,6 +76,8 @@ model User {
   routines        Routine[]
   user_milestones UserMilestone[]
   weight_logs     WeightLog[]
+  audit_as_actor  AuditLog[] @relation("audit_actor")
+  audit_as_target AuditLog[] @relation("audit_target")
 
   @@map("users")
 }
@@ -188,4 +190,25 @@ model UserMilestone {
 
   @@unique([user_id, milestone_id])
   @@map("user_milestones")
+}
+
+model AuditLog {
+  id            Int      @id @default(autoincrement())
+  action        String   @db.Text
+  actor_user_id Int?
+  target_user_id Int?
+  request_id    String?
+  ip            String?
+  user_agent    String?
+  metadata      Json     @default("{}")
+  created_at    DateTime @default(now())
+
+  actor_user  User? @relation("audit_actor", fields: [actor_user_id], references: [id], onDelete: SetNull)
+  target_user User? @relation("audit_target", fields: [target_user_id], references: [id], onDelete: SetNull)
+
+  @@index([action, created_at(sort: Desc)])
+  @@index([actor_user_id, created_at(sort: Desc)])
+  @@index([target_user_id, created_at(sort: Desc)])
+  @@index([request_id])
+  @@map("audit_logs")
 }
