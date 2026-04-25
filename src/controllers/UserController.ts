@@ -6,6 +6,7 @@ import * as milestonesService from '../services/milestone.service';
 import * as statsService from '../services/stats.service';
 import { getTip } from '../services/tips.service';
 import * as userService from '../services/user.service';
+
 export interface AuthRequest extends Request {
   user?: UserPublic;
 }
@@ -18,22 +19,27 @@ const UserController = {
         email?: string;
         password?: string;
       };
+
       if (!name?.trim() || !email?.trim() || !password) {
         return res.status(400).json({
           message: 'Name, email and password are required',
         });
       }
+
       const user = await authService.register({
         name: name.trim(),
         email: email.trim(),
         password,
       });
+
       return res.status(201).json(user);
     } catch (err: unknown) {
       const e = err as Error & { code?: string };
+
       if (e.code === 'EMAIL_IN_USE') {
         return res.status(409).json({ message: 'Email already in use' });
       }
+
       return res.status(500).json({ message: 'Registration failed' });
     }
   },
@@ -44,15 +50,18 @@ const UserController = {
         email?: string;
         password?: string;
       };
+
       if (!email?.trim() || !password) {
         return res.status(400).json({
           message: 'Email and password are required',
         });
       }
+
       const result = await authService.login({
         email: email.trim(),
         password,
       });
+
       return res.status(200).json(result);
     } catch (err: unknown) {
       const e = err as Error & { code?: string };
@@ -60,6 +69,7 @@ const UserController = {
       if (e.code === 'INVALID_CREDENTIALS') {
         return res.status(401).json({ message: 'Invalid email or password' });
       }
+
       return res.status(500).json({ message: 'Login failed' });
     }
   },
@@ -81,30 +91,27 @@ const UserController = {
           message: 'Goodbye!',
           user: req.user,
         });
-      } else {
-        return res.status(200).json({ message: 'Goodbye!' });
       }
+
+      return res.status(200).json({ message: 'Goodbye!' });
     } catch (err: unknown) {
       const e = err as Error & { code?: string };
+
       if (e.code === 'TOKEN_INVALID' || e.code === 'USER_NOT_FOUND') {
         return res.status(401).json({ message: 'Token invalid or logged out' });
       }
+
       return res.status(500).json({ message: 'Logout failed' });
     }
   },
-  async getTips(req: AuthRequest, res: Response) {
-    try {
-      const userId = req.user?.id;
 
-      if (!userId) {
+  async getTip(req: AuthRequest, res: Response) {
+    try {
+      if (!req.user?.id || !req.user.created_at) {
         return res.status(401).json({ message: 'Not authorized' });
       }
 
-      const user = await userService.findById(userId);
-
-      if (!user) {
-        return res.status(404).json({ message: 'User not found' });
-      }
+      const userId = req.user.id;
 
       const stats = await statsService.findByUserId(userId);
       const milestones = await milestonesService.findUnlockedByUser(userId);
@@ -113,15 +120,17 @@ const UserController = {
 
       if (milestones.length > 0) {
         lastMilestoneAt = milestones
-          .map((m: { unlocked_at: Date }) => new Date(m.unlocked_at))
-          .sort((a: Date, b: Date) => b.getTime() - a.getTime())[0];
+          .map((m) => m.unlocked_at)
+          .sort((a, b) => b.getTime() - a.getTime())[0];
       }
 
       const streak = stats?.streak ?? null;
 
       const tip = getTip({
-        created_at: new Date(user.created_at),
-        last_session_at: null,
+        created_at: new Date(req.user.created_at),
+        last_session_at: stats?.last_session_date
+          ? new Date(stats.last_session_date)
+          : null,
         last_milestone_at: lastMilestoneAt,
         streak,
       });

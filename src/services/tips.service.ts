@@ -1,4 +1,4 @@
-import { Tip, TipType, TipsByType } from '../models/Tips';
+import { Tip, TipType, TipsByType } from '../models/Tip';
 
 const DAY_IN_MS = 1000 * 60 * 60 * 24;
 

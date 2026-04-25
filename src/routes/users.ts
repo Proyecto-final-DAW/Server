@@ -23,7 +23,7 @@ router.get(
   '/:userId/tips',
   authentication,
   ensureSelf(),
-  UserController.getTips
+  UserController.getTip
 );
 
 export default router;
