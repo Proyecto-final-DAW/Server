@@ -5,6 +5,7 @@ import express, { NextFunction, Request, Response } from 'express';
 
 import { globalRateLimit } from './middlewares/rateLimitGlobal';
 import { sanitizeRequest } from './middlewares/sanitize';
+import { globalSlowdown } from './middlewares/slowdownGlobal';
 import dietRouter from './routes/diet';
 import exercisesRouter from './routes/exercises';
 import milestonesRouter from './routes/milestones';
@@ -82,6 +83,8 @@ export function createApp() {
     next();
   });
 
+  // Soft-throttle first, then hard-limit with 429.
+  app.use(globalSlowdown);
   app.use(globalRateLimit);
 
   const requestBodyLimit = process.env.REQUEST_BODY_LIMIT ?? '100kb';
