@@ -151,3 +151,7 @@ Open a PR → review → merge.
 
 - [MIGRATIONS.md](./MIGRATIONS.md) — End-to-end migration workflow, migra filters, enum post-processing, commands
 - [scripts/README.md](./scripts/README.md) — `migrate-auto.sh`, `db-helper.mjs`, `postprocess-migra-sql.mjs`, config JSON
+
+## License
+
+**All rights reserved.** No permission is granted to use, copy, modify, or distribute this software without prior written permission. See [LICENSE](./LICENSE).
