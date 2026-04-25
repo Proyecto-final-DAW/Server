@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import express, { NextFunction, Request, Response } from 'express';
 
+import { globalRateLimit } from './middlewares/rateLimitGlobal';
 import { sanitizeRequest } from './middlewares/sanitize';
 import dietRouter from './routes/diet';
 import exercisesRouter from './routes/exercises';
@@ -80,6 +81,8 @@ export function createApp() {
     });
     next();
   });
+
+  app.use(globalRateLimit);
 
   const requestBodyLimit = process.env.REQUEST_BODY_LIMIT ?? '100kb';
   const urlencodedBodyLimit = process.env.URLENCODED_BODY_LIMIT ?? '25kb';
