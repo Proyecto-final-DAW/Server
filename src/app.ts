@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
 
+import { sanitizeRequest } from './middlewares/sanitize';
 import dietRouter from './routes/diet';
 import exercisesRouter from './routes/exercises';
 import milestonesRouter from './routes/milestones';
@@ -69,6 +70,11 @@ export function createApp() {
   );
 
   app.use(express.json());
+  app.use(
+    sanitizeRequest({
+      ignoreKeys: ['password'],
+    })
+  );
 
   app.use((req, res, next) => {
     const start = Date.now();
