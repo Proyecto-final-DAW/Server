@@ -40,8 +40,20 @@ function parseMs(value: string | undefined, fallbackMs: number): number {
 export const globalSlowdown = slowDown({
   windowMs: parseMs(process.env.GLOBAL_SLOWDOWN_WINDOW_MS, 60_000),
   delayAfter: parsePositiveInt(process.env.GLOBAL_SLOWDOWN_AFTER, 60),
-  delayMs: parsePositiveInt(process.env.GLOBAL_SLOWDOWN_DELAY_MS, 250),
   maxDelayMs: parsePositiveInt(process.env.GLOBAL_SLOWDOWN_MAX_DELAY_MS, 5_000),
+  delayMs: (used: number, req: Request) => {
+    const stepMs = parsePositiveInt(process.env.GLOBAL_SLOWDOWN_DELAY_MS, 250);
+    const delayAfter = (req as unknown as { slowDown: { limit: number } })
+      .slowDown.limit;
+    const steps = Math.max(0, used - delayAfter);
+    const delay = steps * stepMs;
+    const maxDelayMs = (
+      req as unknown as {
+        slowDown: { maxDelayMs: number };
+      }
+    ).slowDown.maxDelayMs;
+    return Math.min(delay, maxDelayMs);
+  },
   // Avoid slowing down CORS preflight.
   skip: (req: Request) => req.method === 'OPTIONS',
   keyGenerator: (req: Request) => {

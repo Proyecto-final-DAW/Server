@@ -23,7 +23,7 @@ const OnboardingController = {
     } catch (err: unknown) {
       const error = err as Error & { code?: string };
       if (error.code === 'USER_NOT_FOUND') {
-        return res.status(404).json({ message: 'User not found' });
+        return res.status(404).json({ message: 'Resource not found' });
       }
       if (error.code === 'ONBOARDING_ALREADY_COMPLETED') {
         return res

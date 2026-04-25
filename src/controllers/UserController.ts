@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import { UserPublic } from '../models/User';
 import * as authService from '../services/auth.service';
 import * as userService from '../services/user.service';
+import { sleepJitterMs } from '../utils/sleep';
 import type { LoginBody, RegisterBody } from '../validators/auth';
 
 export interface AuthRequest extends Request {
@@ -23,7 +24,11 @@ const UserController = {
     } catch (err: unknown) {
       const error = err as Error & { code?: string };
       if (error.code === 'EMAIL_IN_USE') {
-        return res.status(409).json({ message: 'Email already in use' });
+        // Enumeration protection: do not confirm whether the email exists.
+        await sleepJitterMs(150, 300); // Random delay to reduce enumeration timing signals.
+        return res.status(409).json({
+          message: 'Registration failed',
+        });
       }
       return res.status(500).json({
         message: 'Registration failed',
@@ -45,6 +50,8 @@ const UserController = {
       const error = err as Error & { code?: string };
 
       if (error.code === 'INVALID_CREDENTIALS') {
+        // Slight delay reduces credential stuffing timing signals.
+        await sleepJitterMs(150, 300); // Random delay to reduce timing signals.
         return res.status(401).json({ message: 'Invalid email or password' });
       }
       return res.status(500).json({

@@ -16,7 +16,7 @@ const ProfileController = {
     } catch (err: unknown) {
       const error = err as Error & { code?: string };
       if (error.code === 'USER_NOT_FOUND') {
-        return res.status(404).json({ message: 'User not found' });
+        return res.status(404).json({ message: 'Resource not found' });
       }
       return res.status(500).json({
         message: 'Failed to get profile',
@@ -41,7 +41,7 @@ const ProfileController = {
       }
       const error = err as Error & { code?: string };
       if (error.code === 'USER_NOT_FOUND') {
-        return res.status(404).json({ message: 'User not found' });
+        return res.status(404).json({ message: 'Resource not found' });
       }
       if (error.code === 'NO_FIELDS_TO_UPDATE') {
         return res.status(400).json({ message: 'No valid fields to update' });
@@ -76,7 +76,7 @@ const ProfileController = {
     } catch (err: unknown) {
       const error = err as Error & { code?: string };
       if (error.code === 'USER_NOT_FOUND') {
-        return res.status(404).json({ message: 'User not found' });
+        return res.status(404).json({ message: 'Resource not found' });
       }
       if (error.code === 'INVALID_PASSWORD') {
         return res
