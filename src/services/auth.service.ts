@@ -5,6 +5,7 @@ import { UserPublic } from '../models/User';
 import * as userService from './user.service';
 
 const SALT_ROUNDS = 10;
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync('not-the-password', SALT_ROUNDS);
 
 interface RegisterBody {
   name: string;
@@ -50,39 +51,23 @@ function buildLoginResponse(user: {
   return { user: publicUser as UserPublic, token };
 }
 
-export async function register(data: RegisterBody): Promise<LoginResponse> {
-  const existing = await userService.findByEmail(data.email);
-  if (existing) {
-    const err = new Error('EMAIL_IN_USE');
-    (err as Error & { code: string }).code = 'EMAIL_IN_USE';
-    throw err;
-  }
+export async function register(
+  data: RegisterBody
+): Promise<{ id: number; email: string }> {
   const hashedPassword = await bcrypt.hash(data.password, SALT_ROUNDS);
   const user = await userService.createUser(
     data.name,
     data.email,
     hashedPassword
   );
-  const result = buildLoginResponse(user as { id: number; email: string });
-
-  await userService.addToken((user as { id: number }).id, result.token);
-
-  return result;
+  return user;
 }
 
 export async function login(data: LoginBody): Promise<LoginResponse> {
   const user = await userService.findByEmail(data.email);
-  if (!user) {
-    const err = new Error('INVALID_CREDENTIALS');
-    (err as Error & { code: string }).code = 'INVALID_CREDENTIALS';
-    throw err;
-  }
-
-  const isPasswordValid = await bcrypt.compare(
-    data.password,
-    user.hashed_password
-  );
-  if (!isPasswordValid) {
+  const hashToCompare = user?.hashed_password ?? DUMMY_PASSWORD_HASH;
+  const isPasswordValid = await bcrypt.compare(data.password, hashToCompare);
+  if (!user || !isPasswordValid) {
     const err = new Error('INVALID_CREDENTIALS');
     (err as Error & { code: string }).code = 'INVALID_CREDENTIALS';
     throw err;

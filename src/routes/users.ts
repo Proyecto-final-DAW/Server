@@ -3,13 +3,29 @@ import express from 'express';
 import MacrosController from '../controllers/MacrosController';
 import UserController from '../controllers/UserController';
 import { authentication } from '../middlewares/auth';
+import {
+  loginBruteforceProtection,
+  registerBruteforceProtection,
+} from '../middlewares/bruteforce';
 import { ensureSelf } from '../middlewares/ensureSelf';
+import { validateBody } from '../middlewares/validate';
+import { loginSchema, registerSchema } from '../validators/auth';
 
 const router = express.Router();
 
 // Auth
-router.post('/auth/register', UserController.register);
-router.post('/auth/login', UserController.login);
+router.post(
+  '/auth/register',
+  registerBruteforceProtection,
+  validateBody(registerSchema),
+  UserController.register
+);
+router.post(
+  '/auth/login',
+  loginBruteforceProtection,
+  validateBody(loginSchema),
+  UserController.login
+);
 router.post('/auth/logout', authentication, UserController.logout);
 
 router.post(
