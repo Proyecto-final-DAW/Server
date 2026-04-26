@@ -35,6 +35,95 @@ const getTotalWeightLifted = async (userId: number): Promise<number> => {
   return result.rows[0].total;
 };
 
+export interface WeeklyMetrics {
+  daysTrained: number;
+  totalExercises: number;
+  totalVolume: number;
+}
+
+export interface WeeklySummary {
+  current: WeeklyMetrics;
+  previous: WeeklyMetrics;
+}
+
+const EMPTY_WEEK: WeeklyMetrics = {
+  daysTrained: 0,
+  totalExercises: 0,
+  totalVolume: 0,
+};
+
+interface WeeklyMetricsRow {
+  bucket: 'current' | 'previous';
+  days_trained: number;
+  total_exercises: number;
+  total_volume: number;
+}
+
+/**
+ * Returns metrics for the current ISO week and the previous one for the user.
+ * - daysTrained: distinct training dates (`sessions.date`) within the week.
+ * - totalExercises: number of `session_exercises` rows.
+ * - totalVolume: sum of `reps * weight` across all `exercise_sets`.
+ */
+export const getWeeklySummary = async (
+  userId: number
+): Promise<WeeklySummary> => {
+  const result = await pool.query<WeeklyMetricsRow>(
+    `WITH bounds AS (
+       SELECT
+         date_trunc('week', CURRENT_DATE)::date AS current_start,
+         (date_trunc('week', CURRENT_DATE) - INTERVAL '1 week')::date AS previous_start,
+         (date_trunc('week', CURRENT_DATE) + INTERVAL '1 week')::date AS next_start
+     ),
+     session_metrics AS (
+       SELECT
+         s.id,
+         s.date,
+         (
+           SELECT COUNT(*)
+           FROM session_exercises se
+           WHERE se.session_id = s.id
+         ) AS exercise_count,
+         (
+           SELECT COALESCE(SUM(es.weight * es.reps), 0)
+           FROM session_exercises se
+           JOIN exercise_sets es ON es.session_exercise_id = se.id
+           WHERE se.session_id = s.id
+         ) AS volume
+       FROM sessions s, bounds b
+       WHERE s.user_id = $1
+         AND s.date >= b.previous_start
+         AND s.date < b.next_start
+     )
+     SELECT
+       CASE
+         WHEN sm.date >= b.current_start THEN 'current'
+         ELSE 'previous'
+       END AS bucket,
+       COUNT(DISTINCT sm.date)::int AS days_trained,
+       COALESCE(SUM(sm.exercise_count), 0)::int AS total_exercises,
+       COALESCE(SUM(sm.volume), 0)::int AS total_volume
+     FROM session_metrics sm, bounds b
+     GROUP BY bucket`,
+    [userId]
+  );
+
+  const summary: WeeklySummary = {
+    current: { ...EMPTY_WEEK },
+    previous: { ...EMPTY_WEEK },
+  };
+
+  for (const row of result.rows) {
+    summary[row.bucket] = {
+      daysTrained: row.days_trained,
+      totalExercises: row.total_exercises,
+      totalVolume: row.total_volume,
+    };
+  }
+
+  return summary;
+};
+
 /**
  * Inserts a new session with all its nested exercises and sets inside a single
  * transaction. If any insert fails, the whole session is rolled back.
