@@ -23,12 +23,15 @@ const FIXED_XP = 15;
 
 /**
  * Calculates XP earned by a single exercise.
- * - Strength: volume-based (weight × reps × sets / 100), min 1
+ * - Strength: volume-based (sum of weight × reps across all sets / 100), min 1
  * - Others: fixed points per exercise
  */
 const calculateExerciseXp = (exercise: SessionExercise): number => {
   if (exercise.type === 'strength') {
-    const volume = exercise.weight * exercise.reps * exercise.sets;
+    const volume = exercise.sets.reduce(
+      (total, set) => total + set.weight * set.reps,
+      0
+    );
     return Math.max(1, Math.floor(volume / VOLUME_DIVISOR));
   }
   return FIXED_XP;
