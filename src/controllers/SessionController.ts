@@ -100,6 +100,24 @@ const SessionController = {
       });
     }
   },
+
+  async weeklySummary(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: 'Not authorized' });
+      }
+
+      const summary = await sessionService.getWeeklySummary(userId);
+      return res.status(200).json(summary);
+    } catch (error: unknown) {
+      const typedError = error as Error;
+      return res.status(500).json({
+        message: 'Failed to get weekly summary',
+        error: typedError?.message || String(error),
+      });
+    }
+  },
 };
 
 export default SessionController;
