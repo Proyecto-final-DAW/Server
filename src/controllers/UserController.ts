@@ -3,6 +3,9 @@ import { Request, Response } from 'express';
 import { UserPublic } from '../models/User';
 import { hashIdentifier } from '../services/audit.service';
 import * as authService from '../services/auth.service';
+import * as milestonesService from '../services/milestone.service';
+import * as statsService from '../services/stats.service';
+import { getTip } from '../services/tips.service';
 import * as userService from '../services/user.service';
 import { safeWriteAuditEvent } from '../utils/audit';
 import { sleepJitterMs } from '../utils/sleep';
@@ -94,6 +97,7 @@ const UserController = {
         },
       });
       res.setHeader('x-auth-token', result.token);
+
       return res.status(200).json(result);
     } catch (err: unknown) {
       const error = err as Error & { code?: string };
@@ -145,7 +149,6 @@ const UserController = {
         return res.status(400).json({ message: 'Not authorized' });
       }
 
-      // Remove token from the user's valid tokens list
       const user = await userService.removeToken(userId, token);
 
       await safeWriteAuditEvent(req, {
@@ -162,9 +165,9 @@ const UserController = {
           message: 'Goodbye!',
           user: req.user,
         });
-      } else {
-        return res.status(200).json({ message: 'Goodbye!' });
       }
+
+      return res.status(200).json({ message: 'Goodbye!' });
     } catch (err: unknown) {
       const error = err as Error & { code?: string };
       if (error.code === 'TOKEN_INVALID' || error.code === 'USER_NOT_FOUND') {
@@ -196,6 +199,42 @@ const UserController = {
         message: 'Logout failed',
         error: error?.message || String(err),
       });
+    }
+  },
+
+  async getTip(req: AuthRequest, res: Response) {
+    try {
+      if (!req.user?.id || !req.user.created_at) {
+        return res.status(401).json({ message: 'Not authorized' });
+      }
+
+      const userId = req.user.id;
+
+      const stats = await statsService.findByUserId(userId);
+      const milestones = await milestonesService.findUnlockedByUser(userId);
+
+      let lastMilestoneAt: Date | null = null;
+
+      if (milestones.length > 0) {
+        lastMilestoneAt = milestones
+          .map((m) => m.unlocked_at)
+          .sort((a, b) => b.getTime() - a.getTime())[0];
+      }
+
+      const streak = stats?.streak ?? null;
+
+      const tip = getTip({
+        created_at: new Date(req.user.created_at),
+        last_session_at: stats?.last_session_date
+          ? new Date(stats.last_session_date)
+          : null,
+        last_milestone_at: lastMilestoneAt,
+        streak,
+      });
+
+      return res.status(200).json(tip);
+    } catch {
+      return res.status(500).json({ message: 'Failed to get tips' });
     }
   },
 };

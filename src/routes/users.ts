@@ -35,4 +35,11 @@ router.post(
   MacrosController.calculate
 );
 
+router.get(
+  '/:userId/tips',
+  authentication,
+  ensureSelf(),
+  UserController.getTip
+);
+
 export default router;

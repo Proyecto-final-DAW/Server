@@ -16,19 +16,117 @@ const countUserSessions = async (userId: number): Promise<number> => {
 const getTotalWeightLifted = async (userId: number): Promise<number> => {
   const result = await pool.query(
     `SELECT COALESCE(SUM(
-       (elem->>'weight')::numeric * (elem->>'reps')::int * (elem->>'sets')::int
+       (set_elem->>'weight')::numeric * (set_elem->>'reps')::int
      ), 0)::int AS total
-     FROM sessions, jsonb_array_elements(exercises::jsonb) AS elem
+     FROM sessions,
+          jsonb_array_elements(exercises::jsonb) AS ex_elem,
+          jsonb_array_elements(ex_elem->'sets') AS set_elem
      WHERE user_id = $1`,
     [userId]
   );
   return result.rows[0].total;
 };
 
+export interface WeeklyMetrics {
+  daysTrained: number;
+  totalExercises: number;
+  totalVolume: number;
+}
+
+export interface WeeklySummary {
+  current: WeeklyMetrics;
+  previous: WeeklyMetrics;
+}
+
+const EMPTY_WEEK: WeeklyMetrics = {
+  daysTrained: 0,
+  totalExercises: 0,
+  totalVolume: 0,
+};
+
+interface WeeklyMetricsRow {
+  bucket: 'current' | 'previous';
+  days_trained: number;
+  total_exercises: number;
+  total_volume: number;
+}
+
+export const getWeeklySummary = async (
+  userId: number
+): Promise<WeeklySummary> => {
+  const result = await pool.query<WeeklyMetricsRow>(
+    `WITH bounds AS (
+       SELECT
+         date_trunc('week', NOW()) AS current_start,
+         date_trunc('week', NOW()) - INTERVAL '1 week' AS previous_start,
+         date_trunc('week', NOW()) + INTERVAL '1 week' AS next_start
+     ),
+     session_metrics AS (
+       SELECT
+         s.created_at,
+         DATE(s.created_at) AS session_date,
+         (
+           SELECT COALESCE(SUM(
+             (elem->>'weight')::numeric * (elem->>'reps')::int * (elem->>'sets')::int
+           ), 0)
+           FROM jsonb_array_elements(s.exercises::jsonb) AS elem
+         ) AS volume,
+         jsonb_array_length(s.exercises::jsonb) AS exercise_count
+       FROM sessions s, bounds b
+       WHERE s.user_id = $1
+         AND s.created_at >= b.previous_start
+         AND s.created_at < b.next_start
+     )
+     SELECT
+       CASE
+         WHEN sm.created_at >= b.current_start THEN 'current'
+         ELSE 'previous'
+       END AS bucket,
+       COUNT(DISTINCT sm.session_date)::int AS days_trained,
+       COALESCE(SUM(sm.exercise_count), 0)::int AS total_exercises,
+       COALESCE(SUM(sm.volume), 0)::int AS total_volume
+     FROM session_metrics sm, bounds b
+     GROUP BY bucket`,
+    [userId]
+  );
+
+  const summary: WeeklySummary = {
+    current: { ...EMPTY_WEEK },
+    previous: { ...EMPTY_WEEK },
+  };
+
+  for (const row of result.rows) {
+    const metrics: WeeklyMetrics = {
+      daysTrained: row.days_trained,
+      totalExercises: row.total_exercises,
+      totalVolume: row.total_volume,
+    };
+    summary[row.bucket] = metrics;
+  }
+
+  return summary;
+};
+
+/**
+ * Inserts the session row. If `sessionDate` is given, stores it as
+ * `created_at` (midnight on that date) so backfilled sessions preserve
+ * the user's chosen date for grouping queries.
+ */
 export const createSession = async (
   userId: number,
-  exercises: SessionExercise[]
+  exercises: SessionExercise[],
+  sessionDate?: string
 ) => {
+  if (sessionDate) {
+    const result = await pool.query(
+      `INSERT INTO sessions (user_id, exercises, created_at)
+       VALUES ($1, $2, $3::date)
+       RETURNING *`,
+      [userId, JSON.stringify(exercises), sessionDate]
+    );
+    return result.rows[0];
+  }
+
   const result = await pool.query(
     `INSERT INTO sessions (user_id, exercises) VALUES ($1, $2) RETURNING *`,
     [userId, JSON.stringify(exercises)]
@@ -36,16 +134,23 @@ export const createSession = async (
   return result.rows[0];
 };
 
+const toLocalMidnight = (value: string | Date): Date => {
+  const date = typeof value === 'string' ? new Date(value) : new Date(value);
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
 /**
  * Processes a new training session:
- * 1. Saves the session to DB
+ * 1. Saves the session to DB (using sessionDate if provided)
  * 2. Calculates XP gains from exercises
  * 3. Applies gains to user stats (with level-up handling)
- * 4. Updates streak tracking
+ * 4. Updates streak tracking only if the session is the most recent
  */
 export const processSession = async (
   userId: number,
-  exercises: SessionExercise[]
+  exercises: SessionExercise[],
+  sessionDate?: string
 ) => {
   const currentStats = await statsService.findByUserId(userId);
   if (!currentStats) {
@@ -54,29 +159,36 @@ export const processSession = async (
     throw error;
   }
 
-  const session = await createSession(userId, exercises);
+  const session = await createSession(userId, exercises, sessionDate);
 
   const gains = calculateGains(exercises);
   const statUpdates = applyGains(currentStats, gains);
 
-  // Update streak
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const sessionDay = toLocalMidnight(sessionDate ?? new Date());
 
   const lastDate = currentStats.last_session_date
-    ? new Date(currentStats.last_session_date)
+    ? toLocalMidnight(currentStats.last_session_date)
     : null;
-  if (lastDate) lastDate.setHours(0, 0, 0, 0);
-
-  const diffDays = lastDate
-    ? Math.floor((today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24))
-    : -1;
 
   let streak = currentStats.streak;
-  if (diffDays === 1) {
-    streak += 1;
-  } else if (diffDays !== 0) {
-    streak = 1;
+  let lastSessionDate = currentStats.last_session_date;
+
+  // Only update streak/last_session_date if this session is the latest one.
+  // Backfilled (older) sessions still save XP but don't disrupt the streak.
+  if (!lastDate || sessionDay.getTime() >= lastDate.getTime()) {
+    const diffDays = lastDate
+      ? Math.floor(
+          (sessionDay.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24)
+        )
+      : -1;
+
+    if (diffDays === 1) {
+      streak += 1;
+    } else if (diffDays !== 0) {
+      streak = 1;
+    }
+
+    lastSessionDate = sessionDay.toISOString().split('T')[0];
   }
 
   const bestStreak = Math.max(currentStats.best_streak, streak);
@@ -96,7 +208,7 @@ export const processSession = async (
     tenacity_level: tenacityLevel,
     streak,
     best_streak: bestStreak,
-    last_session_date: today.toISOString().split('T')[0],
+    last_session_date: lastSessionDate,
   });
 
   // Check milestones — secondary, must not block the session
