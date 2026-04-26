@@ -1,8 +1,13 @@
 /* eslint-disable no-console */
 import cors from 'cors';
 import dotenv from 'dotenv';
-import express from 'express';
+import express, { NextFunction, Request, Response } from 'express';
+import helmet from 'helmet';
 
+import { httpLogger } from './middlewares/httpLogger';
+import { globalRateLimit } from './middlewares/rateLimitGlobal';
+import { sanitizeRequest } from './middlewares/sanitize';
+import { globalSlowdown } from './middlewares/slowdownGlobal';
 import dietRouter from './routes/diet';
 import exercisesRouter from './routes/exercises';
 import milestonesRouter from './routes/milestones';
@@ -46,6 +51,17 @@ export function createApp() {
 
   const app = express();
 
+  // Ensure req.ip works correctly behind reverse proxies (e.g. Netlify).
+  // In serverless/proxied deployments, the client IP comes from X-Forwarded-For.
+  if (process.env.NETLIFY || process.env.TRUST_PROXY) {
+    const trustProxyRaw = process.env.TRUST_PROXY?.trim();
+    const trustProxy =
+      trustProxyRaw && trustProxyRaw.length > 0
+        ? Number.parseInt(trustProxyRaw, 10)
+        : 1;
+    app.set('trust proxy', Number.isFinite(trustProxy) ? trustProxy : 1);
+  }
+
   const corsOriginEnv = process.env.CORS_ORIGIN || 'http://localhost:5173';
   const allowAnyOrigin = corsOriginEnv.trim() === '*';
   const allowedOrigins = corsOriginEnv
@@ -68,18 +84,43 @@ export function createApp() {
     })
   );
 
-  app.use(express.json());
+  // Basic security headers.
+  app.disable('x-powered-by');
+  app.use(
+    helmet({
+      // This is an API; CSP is usually set by the frontend/CDN.
+      contentSecurityPolicy: false,
+      crossOriginEmbedderPolicy: false,
+    })
+  );
 
-  app.use((req, res, next) => {
-    const start = Date.now();
-    res.on('finish', () => {
-      const duration = Date.now() - start;
-      console.log(
-        `${req.method} ${req.originalUrl} ${res.statusCode} - ${duration}ms`
-      );
-    });
-    next();
-  });
+  app.use(httpLogger);
+
+  // Soft-throttle first, then hard-limit with 429.
+  app.use(globalSlowdown);
+  app.use(globalRateLimit);
+
+  const requestBodyLimit = process.env.REQUEST_BODY_LIMIT ?? '100kb';
+  const urlencodedBodyLimit = process.env.URLENCODED_BODY_LIMIT ?? '25kb';
+
+  app.use(
+    express.json({
+      limit: requestBodyLimit,
+      strict: true,
+    })
+  );
+  app.use(
+    express.urlencoded({
+      extended: false,
+      limit: urlencodedBodyLimit,
+      parameterLimit: 1000,
+    })
+  );
+  app.use(
+    sanitizeRequest({
+      ignoreKeys: ['password'],
+    })
+  );
 
   app.use('/users', usersRouter);
   app.use('/profile', profileRouter);
@@ -91,6 +132,31 @@ export function createApp() {
   app.use('/progress', progressRouter);
   app.use('/diet', dietRouter);
   app.use('/routines', routinesRouter);
+
+  // Payload-too-large handler (body-parser / express.json)
+  app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
+    if (
+      err &&
+      typeof err === 'object' &&
+      ('type' in err || 'status' in err || 'statusCode' in err)
+    ) {
+      const maybe = err as {
+        type?: string;
+        status?: number;
+        statusCode?: number;
+      };
+      const status = maybe.statusCode ?? maybe.status;
+      if (status === 413 || maybe.type === 'entity.too.large') {
+        console.warn(
+          `[payload] 413 entity.too.large (json=${requestBodyLimit}, urlencoded=${urlencodedBodyLimit})`
+        );
+        return res.status(413).json({
+          message: 'Payload too large',
+        });
+      }
+    }
+    return next(err);
+  });
 
   return app;
 }
