@@ -14,7 +14,6 @@ async function connectDatabase(): Promise<void> {
 const PORT = process.env.PORT || 3000;
 
 async function startServer() {
-  // createApp() loads dotenv (.env + .env.local/.env.production)
   const app = createApp();
 
   try {
