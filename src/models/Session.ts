@@ -10,21 +10,47 @@
 
 export type ExerciseType = 'strength' | 'cardio' | 'explosive' | 'stretch';
 
-export interface SessionSet {
+export interface ExerciseSet {
+  id: number;
+  session_exercise_id: number;
   reps: number;
   weight: number;
+  order_index: number;
 }
 
 export interface SessionExercise {
-  exerciseId: string;
+  id: number;
+  session_id: number;
+  exercise_api_id: string;
   name: string;
   type: ExerciseType;
-  sets: SessionSet[];
+  order_index: number;
+  sets: ExerciseSet[];
 }
 
 export interface Session {
   id: number;
   user_id: number;
-  exercises: SessionExercise[];
+  routine_id: number | null;
+  date: string;
   created_at: Date;
+  exercises: SessionExercise[];
+}
+
+export interface CreateSessionSetInput {
+  reps: number;
+  weight: number;
+}
+
+export interface CreateSessionExerciseInput {
+  exercise_api_id: string;
+  name: string;
+  type: ExerciseType;
+  sets: CreateSessionSetInput[];
+}
+
+export interface CreateSessionInput {
+  date: string;
+  routine_id?: number | null;
+  exercises: CreateSessionExerciseInput[];
 }
