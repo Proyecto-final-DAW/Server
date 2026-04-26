@@ -1,6 +1,8 @@
 import pool from '../db/pool';
 import { OnboardingFormData } from '../models/Onboarding';
 import { UserPublic } from '../models/User';
+import { resolveMacroInputs } from '../utils/macroProfile';
+import { calculateCalories } from './macros.service';
 import { normalizeUserRow } from './user.service';
 
 /** Maps onboarding request fields to `users` columns (single source of truth). */
@@ -110,6 +112,32 @@ export const submitOnboarding = async (
 
   if (result.rows[0]) {
     const row = normalizeUserRow(result.rows[0] as Record<string, unknown>);
+
+    const inputs = resolveMacroInputs(row);
+    if (inputs) {
+      const targets = calculateCalories(
+        inputs.weightKg,
+        inputs.heightCm,
+        inputs.age,
+        inputs.sex,
+        inputs.activityFactor,
+        inputs.goal
+      );
+      await pool.query(
+        `UPDATE users
+            SET daily_calories = $1, protein_grams = $2, fat_grams = $3, carb_grams = $4,
+                updated_at = NOW()
+          WHERE id = $5`,
+        [
+          targets.daily_calories,
+          targets.protein_grams,
+          targets.fat_grams,
+          targets.carb_grams,
+          userId,
+        ]
+      );
+    }
+
     const { hashed_password: _hp, tokens: _tokens, ...user } = row;
     return user as UserPublic;
   }
