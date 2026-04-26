@@ -16,9 +16,11 @@ const countUserSessions = async (userId: number): Promise<number> => {
 const getTotalWeightLifted = async (userId: number): Promise<number> => {
   const result = await pool.query(
     `SELECT COALESCE(SUM(
-       (elem->>'weight')::numeric * (elem->>'reps')::int * (elem->>'sets')::int
+       (set_elem->>'weight')::numeric * (set_elem->>'reps')::int
      ), 0)::int AS total
-     FROM sessions, jsonb_array_elements(exercises::jsonb) AS elem
+     FROM sessions,
+          jsonb_array_elements(exercises::jsonb) AS ex_elem,
+          jsonb_array_elements(ex_elem->'sets') AS set_elem
      WHERE user_id = $1`,
     [userId]
   );
@@ -105,10 +107,26 @@ export const getWeeklySummary = async (
   return summary;
 };
 
+/**
+ * Inserts the session row. If `sessionDate` is given, stores it as
+ * `created_at` (midnight on that date) so backfilled sessions preserve
+ * the user's chosen date for grouping queries.
+ */
 export const createSession = async (
   userId: number,
-  exercises: SessionExercise[]
+  exercises: SessionExercise[],
+  sessionDate?: string
 ) => {
+  if (sessionDate) {
+    const result = await pool.query(
+      `INSERT INTO sessions (user_id, exercises, created_at)
+       VALUES ($1, $2, $3::date)
+       RETURNING *`,
+      [userId, JSON.stringify(exercises), sessionDate]
+    );
+    return result.rows[0];
+  }
+
   const result = await pool.query(
     `INSERT INTO sessions (user_id, exercises) VALUES ($1, $2) RETURNING *`,
     [userId, JSON.stringify(exercises)]
@@ -116,16 +134,23 @@ export const createSession = async (
   return result.rows[0];
 };
 
+const toLocalMidnight = (value: string | Date): Date => {
+  const date = typeof value === 'string' ? new Date(value) : new Date(value);
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
 /**
  * Processes a new training session:
- * 1. Saves the session to DB
+ * 1. Saves the session to DB (using sessionDate if provided)
  * 2. Calculates XP gains from exercises
  * 3. Applies gains to user stats (with level-up handling)
- * 4. Updates streak tracking
+ * 4. Updates streak tracking only if the session is the most recent
  */
 export const processSession = async (
   userId: number,
-  exercises: SessionExercise[]
+  exercises: SessionExercise[],
+  sessionDate?: string
 ) => {
   const currentStats = await statsService.findByUserId(userId);
   if (!currentStats) {
@@ -134,29 +159,36 @@ export const processSession = async (
     throw error;
   }
 
-  const session = await createSession(userId, exercises);
+  const session = await createSession(userId, exercises, sessionDate);
 
   const gains = calculateGains(exercises);
   const statUpdates = applyGains(currentStats, gains);
 
-  // Update streak
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const sessionDay = toLocalMidnight(sessionDate ?? new Date());
 
   const lastDate = currentStats.last_session_date
-    ? new Date(currentStats.last_session_date)
+    ? toLocalMidnight(currentStats.last_session_date)
     : null;
-  if (lastDate) lastDate.setHours(0, 0, 0, 0);
-
-  const diffDays = lastDate
-    ? Math.floor((today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24))
-    : -1;
 
   let streak = currentStats.streak;
-  if (diffDays === 1) {
-    streak += 1;
-  } else if (diffDays !== 0) {
-    streak = 1;
+  let lastSessionDate = currentStats.last_session_date;
+
+  // Only update streak/last_session_date if this session is the latest one.
+  // Backfilled (older) sessions still save XP but don't disrupt the streak.
+  if (!lastDate || sessionDay.getTime() >= lastDate.getTime()) {
+    const diffDays = lastDate
+      ? Math.floor(
+          (sessionDay.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24)
+        )
+      : -1;
+
+    if (diffDays === 1) {
+      streak += 1;
+    } else if (diffDays !== 0) {
+      streak = 1;
+    }
+
+    lastSessionDate = sessionDay.toISOString().split('T')[0];
   }
 
   const bestStreak = Math.max(currentStats.best_streak, streak);
@@ -176,7 +208,7 @@ export const processSession = async (
     tenacity_level: tenacityLevel,
     streak,
     best_streak: bestStreak,
-    last_session_date: today.toISOString().split('T')[0],
+    last_session_date: lastSessionDate,
   });
 
   // Check milestones — secondary, must not block the session

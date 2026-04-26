@@ -10,13 +10,16 @@
 
 export type ExerciseType = 'strength' | 'cardio' | 'explosive' | 'stretch';
 
+export interface SessionSet {
+  reps: number;
+  weight: number;
+}
+
 export interface SessionExercise {
   exerciseId: string;
   name: string;
   type: ExerciseType;
-  sets: number;
-  reps: number;
-  weight: number;
+  sets: SessionSet[];
 }
 
 export interface Session {

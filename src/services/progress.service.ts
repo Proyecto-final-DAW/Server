@@ -95,10 +95,12 @@ export const getExerciseMaxHistory = async (
               (s.created_at AT TIME ZONE 'UTC' AT TIME ZONE $3)::date,
               'YYYY-MM-DD'
             ) AS date,
-            MAX((elem->>'weight')::numeric)::float AS max_weight
-       FROM sessions s, jsonb_array_elements(s.exercises::jsonb) AS elem
+            MAX((set_elem->>'weight')::numeric)::float AS max_weight
+       FROM sessions s,
+            jsonb_array_elements(s.exercises::jsonb) AS ex_elem,
+            jsonb_array_elements(ex_elem->'sets') AS set_elem
       WHERE s.user_id = $1
-        AND elem->>'exerciseId' = $2
+        AND ex_elem->>'exerciseId' = $2
       GROUP BY (s.created_at AT TIME ZONE 'UTC' AT TIME ZONE $3)::date
       ORDER BY (s.created_at AT TIME ZONE 'UTC' AT TIME ZONE $3)::date ASC`,
     [userId, exerciseId, timezone]
