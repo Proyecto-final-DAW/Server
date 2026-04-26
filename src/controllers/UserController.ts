@@ -16,26 +16,31 @@ const UserController = {
   async register(req: Request, res: Response) {
     try {
       const { name, email, password } = req.body as RegisterBody;
-      const user = await authService.register({
+      const created = await authService.register({
         name,
         email,
         password,
       });
       await safeWriteAuditEvent(req, {
         action: 'AUTH_REGISTER_SUCCESS',
-        actorUserId: user.user.id,
-        targetUserId: user.user.id,
+        actorUserId: created.id,
+        targetUserId: created.id,
         requestId: (req as unknown as { id?: string }).id ?? null,
         ip: req.ip,
         userAgent: req.headers['user-agent'] ?? null,
+        metadata: {
+          emailHash: hashIdentifier(email),
+        },
       });
-      res.setHeader('x-auth-token', user.token);
-      return res.status(201).json(user);
+      await sleepJitterMs(150, 300);
+      return res.status(202).json({ message: 'Registration processed' });
     } catch (err: unknown) {
       const error = err as Error & { code?: string };
-      if (error.code === 'EMAIL_IN_USE') {
-        // Enumeration protection: do not confirm whether the email exists.
-        await sleepJitterMs(150, 300); // Random delay to reduce enumeration timing signals.
+
+      // Enumeration protection: do not confirm whether the email exists.
+      // Postgres unique violation = 23505 (e.g. duplicate email).
+      if (error.code === '23505') {
+        await sleepJitterMs(150, 300);
         await safeWriteAuditEvent(req, {
           action: 'AUTH_REGISTER_FAILED',
           actorUserId: null,
@@ -50,9 +55,7 @@ const UserController = {
             ),
           },
         });
-        return res.status(409).json({
-          message: 'Registration failed',
-        });
+        return res.status(202).json({ message: 'Registration processed' });
       }
       await safeWriteAuditEvent(req, {
         action: 'AUTH_REGISTER_FAILED',

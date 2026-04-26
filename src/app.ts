@@ -51,6 +51,17 @@ export function createApp() {
 
   const app = express();
 
+  // Ensure req.ip works correctly behind reverse proxies (e.g. Netlify).
+  // In serverless/proxied deployments, the client IP comes from X-Forwarded-For.
+  if (process.env.NETLIFY || process.env.TRUST_PROXY) {
+    const trustProxyRaw = process.env.TRUST_PROXY?.trim();
+    const trustProxy =
+      trustProxyRaw && trustProxyRaw.length > 0
+        ? Number.parseInt(trustProxyRaw, 10)
+        : 1;
+    app.set('trust proxy', Number.isFinite(trustProxy) ? trustProxy : 1);
+  }
+
   const corsOriginEnv = process.env.CORS_ORIGIN || 'http://localhost:5173';
   const allowAnyOrigin = corsOriginEnv.trim() === '*';
   const allowedOrigins = corsOriginEnv
