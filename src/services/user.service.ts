@@ -3,6 +3,10 @@ import type { Goal, Sex } from '@prisma/client';
 import pool from '../db/pool';
 import { calculateCalories } from './macros.service';
 
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
 /** `pg` returns enum arrays (e.g. `Goal[]`) as strings like `{LOSE_FAT}`. */
 function parsePgEnumArray(value: unknown): string[] {
   if (Array.isArray(value)) {
@@ -49,16 +53,18 @@ export const createUser = async (
   email: string,
   passwordHash: string
 ) => {
+  const normalizedEmail = normalizeEmail(email);
   const result = await pool.query(
     'INSERT INTO users (name, email, hashed_password) VALUES ($1, $2, $3) RETURNING id, name, email, created_at, updated_at',
-    [name, email, passwordHash]
+    [name, normalizedEmail, passwordHash]
   );
   return result.rows[0];
 };
 
 export const findByEmail = async (email: string) => {
+  const normalizedEmail = normalizeEmail(email);
   const result = await pool.query('SELECT * FROM users WHERE email = $1', [
-    email,
+    normalizedEmail,
   ]);
   return normalizeUserRow(result.rows[0]);
 };

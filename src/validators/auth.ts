@@ -3,6 +3,12 @@ import { z } from 'zod';
 const trimmed = <TSchema extends z.ZodTypeAny>(schema: TSchema) =>
   z.preprocess((v) => (typeof v === 'string' ? v.trim() : v), schema);
 
+const emailNormalized = () =>
+  z.preprocess(
+    (v) => (typeof v === 'string' ? v.trim().toLowerCase() : v),
+    z.string().min(1, 'email is required').email('email must be a valid email')
+  );
+
 export const registerSchema = z
   .object({
     name: trimmed(
@@ -11,12 +17,7 @@ export const registerSchema = z
         .min(1, 'name is required')
         .min(2, 'name must be at least 2 characters')
     ),
-    email: trimmed(
-      z
-        .string()
-        .min(1, 'email is required')
-        .email('email must be a valid email')
-    ),
+    email: emailNormalized(),
     password: z
       .string()
       .min(1, 'password is required')
@@ -26,12 +27,7 @@ export const registerSchema = z
 
 export const loginSchema = z
   .object({
-    email: trimmed(
-      z
-        .string()
-        .min(1, 'email is required')
-        .email('email must be a valid email')
-    ),
+    email: emailNormalized(),
     password: z.string().min(1, 'password is required'),
   })
   .strict();
