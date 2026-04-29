@@ -22,7 +22,7 @@ export function resolveMacroInputs(
   if (
     !user.weight ||
     !user.height ||
-    !user.age ||
+    !user.birth_date ||
     !user.sex ||
     !user.activity_level ||
     !Array.isArray(goals) ||
@@ -37,9 +37,24 @@ export function resolveMacroInputs(
   return {
     weightKg: Number(user.weight),
     heightCm: Number(user.height),
-    age: Number(user.age),
+    age: ageFromBirthDate(new Date(user.birth_date as string | Date)),
     sex: user.sex as Sex,
     activityFactor,
     goal: goals[0],
   };
+}
+
+/**
+ * Whole years since `birthDate`. Compares in UTC to match how Prisma stores
+ * `@db.Date` (UTC midnight) and to stay independent of the server's TZ.
+ */
+function ageFromBirthDate(birthDate: Date): number {
+  const today = new Date();
+  let age = today.getUTCFullYear() - birthDate.getUTCFullYear();
+  const hasHadBirthdayThisYear =
+    today.getUTCMonth() > birthDate.getUTCMonth() ||
+    (today.getUTCMonth() === birthDate.getUTCMonth() &&
+      today.getUTCDate() >= birthDate.getUTCDate());
+  if (!hasHadBirthdayThisYear) age -= 1;
+  return age;
 }
