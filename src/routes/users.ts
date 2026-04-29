@@ -28,6 +28,8 @@ router.post(
 );
 router.post('/auth/logout', authentication, UserController.logout);
 
+router.get('/cards', authentication, UserController.getCards);
+
 router.post(
   '/:userId/macros/calculate',
   authentication,
