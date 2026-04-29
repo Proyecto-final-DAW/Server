@@ -1,4 +1,6 @@
 import pool from '../db/pool';
+import { resolveMacroInputs } from '../utils/macroProfile';
+import { calculateCalories } from './macros.service';
 
 export interface WeightEntry {
   date: string;
@@ -25,10 +27,12 @@ export const getWeightHistory = async (
 ): Promise<WeightEntry[]> => {
   const params: unknown[] = [userId];
   let whereBefore = '';
+
   if (options.before) {
     params.push(options.before.toISOString().split('T')[0]);
     whereBefore = ` AND date < $${params.length}`;
   }
+
   params.push(options.limit);
 
   const result = await pool.query(
@@ -39,12 +43,12 @@ export const getWeightHistory = async (
       LIMIT $${params.length}`,
     params
   );
+
   return result.rows;
 };
 
 /**
  * Registers a new weight entry and keeps `users.weight` in sync
- * so macro recalculations stay coherent. Runs in a transaction.
  */
 export const registerWeight = async (
   userId: number,
@@ -52,6 +56,7 @@ export const registerWeight = async (
   date: Date
 ): Promise<WeightEntry> => {
   const client = await pool.connect();
+
   try {
     await client.query('BEGIN');
 
@@ -64,12 +69,49 @@ export const registerWeight = async (
       [userId, weight, isoDate]
     );
 
-    await client.query(
-      `UPDATE users SET weight = $1, updated_at = NOW() WHERE id = $2`,
+    const updatedUserResult = await client.query(
+      `UPDATE users
+          SET weight = $1,
+              updated_at = NOW()
+        WHERE id = $2
+        RETURNING *`,
       [weight, userId]
     );
 
+    const updatedUser = updatedUserResult.rows[0];
+
+    const macroInputs = resolveMacroInputs(updatedUser);
+
+    if (macroInputs) {
+      const macros = calculateCalories(
+        macroInputs.weightKg,
+        macroInputs.heightCm,
+        macroInputs.age,
+        macroInputs.sex,
+        macroInputs.activityFactor,
+        macroInputs.goal
+      );
+
+      await client.query(
+        `UPDATE users
+            SET calories = $1,
+                protein = $2,
+                carbs = $3,
+                fats = $4,
+                updated_at = NOW()
+          WHERE id = $5`,
+        [
+          macros.daily_calories,
+          macros.protein_grams,
+          macros.carb_grams,
+          macros.fat_grams,
+          userId,
+        ]
+      );
+    }
+
     await client.query('COMMIT');
+
     return inserted.rows[0];
   } catch (error) {
     await client.query('ROLLBACK');
@@ -105,5 +147,6 @@ export const getExerciseMaxHistory = async (
       ORDER BY (s.created_at AT TIME ZONE 'UTC' AT TIME ZONE $3)::date ASC`,
     [userId, exerciseId, timezone]
   );
+
   return result.rows;
 };
