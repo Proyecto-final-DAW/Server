@@ -19,10 +19,11 @@ export function resolveMacroInputs(
   user: Record<string, unknown>
 ): MacroInputs | null {
   const goals = user.goals as Goal[] | undefined;
+
   if (
     !user.weight ||
     !user.height ||
-    !user.age ||
+    !user.birth_date ||
     !user.sex ||
     !user.activity_level ||
     !Array.isArray(goals) ||
@@ -34,10 +35,24 @@ export function resolveMacroInputs(
   const activityFactor = ACTIVITY_FACTOR_MAP[user.activity_level as string];
   if (!activityFactor) return null;
 
+  const birthDate = new Date(user.birth_date as string);
+  const today = new Date();
+
+  let age = today.getFullYear() - birthDate.getFullYear();
+
+  const hasHadBirthdayThisYear =
+    today.getMonth() > birthDate.getMonth() ||
+    (today.getMonth() === birthDate.getMonth() &&
+      today.getDate() >= birthDate.getDate());
+
+  if (!hasHadBirthdayThisYear) {
+    age -= 1;
+  }
+
   return {
     weightKg: Number(user.weight),
     heightCm: Number(user.height),
-    age: Number(user.age),
+    age,
     sex: user.sex as Sex,
     activityFactor,
     goal: goals[0],
