@@ -1,4 +1,6 @@
 import pool from '../db/pool';
+import { resolveMacroInputs } from '../utils/macroProfile';
+import { calculateCalories } from './macros.service';
 
 export interface WeightEntry {
   date: string;
@@ -64,10 +66,44 @@ export const registerWeight = async (
       [userId, weight, isoDate]
     );
 
-    await client.query(
-      `UPDATE users SET weight = $1, updated_at = NOW() WHERE id = $2`,
+    const updatedUserResult = await client.query(
+      `UPDATE users
+          SET weight = $1,
+              updated_at = NOW()
+        WHERE id = $2
+        RETURNING *`,
       [weight, userId]
     );
+
+    const macroInputs = resolveMacroInputs(updatedUserResult.rows[0]);
+
+    if (macroInputs) {
+      const macros = calculateCalories(
+        macroInputs.weightKg,
+        macroInputs.heightCm,
+        macroInputs.age,
+        macroInputs.sex,
+        macroInputs.activityFactor,
+        macroInputs.goal
+      );
+
+      await client.query(
+        `UPDATE users
+            SET daily_calories = $1,
+                protein_grams  = $2,
+                carb_grams     = $3,
+                fat_grams      = $4,
+                updated_at     = NOW()
+          WHERE id = $5`,
+        [
+          macros.daily_calories,
+          macros.protein_grams,
+          macros.carb_grams,
+          macros.fat_grams,
+          userId,
+        ]
+      );
+    }
 
     await client.query('COMMIT');
     return inserted.rows[0];
