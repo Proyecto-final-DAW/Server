@@ -115,21 +115,13 @@ const ProgressController = {
         return res.status(400).json({ message: 'exerciseId is required' });
       }
 
-      const { tz } = req.query as { tz?: string };
-      const timezone = typeof tz === 'string' && tz.trim() ? tz.trim() : 'UTC';
-
       const history = await progressService.getExerciseMaxHistory(
         userId,
-        exerciseId.trim(),
-        timezone
+        exerciseId.trim()
       );
       return res.status(200).json(history);
     } catch (err: unknown) {
       const error = err as Error & { code?: string };
-      // Postgres raises 22023 ("invalid_parameter_value") for unknown time zones
-      if (error.code === '22023') {
-        return res.status(400).json({ message: 'Invalid tz query parameter' });
-      }
       return res.status(500).json({
         message: 'Failed to get exercise history',
         error: error?.message || String(err),
