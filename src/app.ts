@@ -17,6 +17,7 @@ import progressRouter from './routes/progress';
 import routinesRouter from './routes/routines';
 import sessionsRouter from './routes/sessions';
 import statsRouter from './routes/stats';
+import streakRouter from './routes/streak';
 import usersRouter from './routes/users';
 
 export function createApp() {
@@ -132,6 +133,7 @@ export function createApp() {
   app.use('/progress', progressRouter);
   app.use('/diet', dietRouter);
   app.use('/routines', routinesRouter);
+  app.use('/streak', streakRouter);
 
   // Payload-too-large handler (body-parser / express.json)
   app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
