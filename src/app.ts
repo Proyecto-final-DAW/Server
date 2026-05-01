@@ -7,6 +7,7 @@ import { httpLogger } from './middlewares/httpLogger';
 import { globalRateLimit } from './middlewares/rateLimitGlobal';
 import { sanitizeRequest } from './middlewares/sanitize';
 import { globalSlowdown } from './middlewares/slowdownGlobal';
+import characterRouter from './routes/character';
 import dietRouter from './routes/diet';
 import exercisesRouter from './routes/exercises';
 import milestonesRouter from './routes/milestones';
@@ -133,6 +134,7 @@ export function createApp() {
   app.use('/diet', dietRouter);
   app.use('/routines', routinesRouter);
   app.use('/streak', streakRouter);
+  app.use('/character', characterRouter);
 
   // Payload-too-large handler (body-parser / express.json)
   app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
