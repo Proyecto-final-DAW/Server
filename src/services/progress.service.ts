@@ -116,30 +116,25 @@ export const registerWeight = async (
 };
 
 /**
- * Returns the maximum weight lifted for a given exercise, grouped by local day.
- * `timezone` is an IANA name (e.g. 'Europe/Madrid'); defaults to UTC.
- * Sessions' `created_at` is stored as UTC timestamp without tz, so we
- * stamp it as UTC before converting.
+ * Returns the maximum weight lifted for a given exercise, grouped by training day.
+ * Uses `sessions.date` (`@db.Date`), so the result reflects the actual day the
+ * user trained and is independent of the server's process timezone.
  */
 export const getExerciseMaxHistory = async (
   userId: number,
-  exerciseId: string,
-  timezone = 'UTC'
+  exerciseId: string
 ): Promise<ExerciseMaxEntry[]> => {
   const result = await pool.query(
-    `SELECT TO_CHAR(
-              (s.created_at AT TIME ZONE 'UTC' AT TIME ZONE $3)::date,
-              'YYYY-MM-DD'
-            ) AS date,
-            MAX((set_elem->>'weight')::numeric)::float AS max_weight
-       FROM sessions s,
-            jsonb_array_elements(s.exercises::jsonb) AS ex_elem,
-            jsonb_array_elements(ex_elem->'sets') AS set_elem
+    `SELECT TO_CHAR(s.date, 'YYYY-MM-DD') AS date,
+            MAX(es.weight)::float AS max_weight
+       FROM sessions s
+       JOIN session_exercises se ON se.session_id = s.id
+       JOIN exercise_sets     es ON es.session_exercise_id = se.id
       WHERE s.user_id = $1
-        AND ex_elem->>'exerciseId' = $2
-      GROUP BY (s.created_at AT TIME ZONE 'UTC' AT TIME ZONE $3)::date
-      ORDER BY (s.created_at AT TIME ZONE 'UTC' AT TIME ZONE $3)::date ASC`,
-    [userId, exerciseId, timezone]
+        AND se.exercise_api_id = $2
+      GROUP BY s.date
+      ORDER BY s.date ASC`,
+    [userId, exerciseId]
   );
   return result.rows;
 };
