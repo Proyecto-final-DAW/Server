@@ -128,6 +128,24 @@ const ProgressController = {
       });
     }
   },
+
+  async getPerformedExercises(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: 'Not authorized' });
+      }
+
+      const exercises = await progressService.getPerformedExercises(userId);
+      return res.status(200).json(exercises);
+    } catch (err: unknown) {
+      const error = err as Error & { code?: string };
+      return res.status(500).json({
+        message: 'Failed to get performed exercises',
+        error: error?.message || String(err),
+      });
+    }
+  },
 };
 
 export default ProgressController;
