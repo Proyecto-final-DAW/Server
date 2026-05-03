@@ -144,6 +144,36 @@ const SessionController = {
     }
   },
 
+  async getHistory(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: 'Not authorized' });
+      }
+
+      const pageRaw = req.query.page;
+      const limitRaw = req.query.limit;
+      const page =
+        typeof pageRaw === 'string' ? parseInt(pageRaw, 10) : undefined;
+      const limit =
+        typeof limitRaw === 'string' ? parseInt(limitRaw, 10) : undefined;
+
+      const result = await sessionService.getUserSessions(userId, {
+        page: page !== undefined && !Number.isNaN(page) ? page : undefined,
+        limit: limit !== undefined && !Number.isNaN(limit) ? limit : undefined,
+      });
+      return res.status(200).json(result);
+    } catch (err) {
+      logger.error(
+        { err, userId: req.user?.id },
+        'Failed to fetch session history'
+      );
+      return res
+        .status(500)
+        .json({ message: 'Failed to fetch session history' });
+    }
+  },
+
   async getDetail(req: AuthRequest, res: Response) {
     try {
       const userId = req.user?.id;
