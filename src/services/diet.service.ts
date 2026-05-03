@@ -20,8 +20,12 @@ function throwCoded(message: string, code: string): never {
  * or is missing any macro input.
  */
 export async function getCurrentMacros(userId: number): Promise<MacroTargets> {
+  // `birth_date` (not `age`) is what resolveMacroInputs reads to compute
+  // the Mifflin–St Jeor age input — selecting only `age` made every diet
+  // request 404 with ONBOARDING_INCOMPLETE because birth_date came back
+  // as undefined.
   const result = await pool.query(
-    `SELECT onboarding_completed, weight, height, age, sex, activity_level, goals,
+    `SELECT onboarding_completed, weight, height, birth_date, sex, activity_level, goals,
             daily_calories, protein_grams, fat_grams, carb_grams
        FROM users WHERE id = $1`,
     [userId]
