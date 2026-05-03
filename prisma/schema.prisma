@@ -235,23 +235,25 @@ model UserMilestone {
 
 enum ClassTierStage {
   NORMAL
-  TRASCENDENTE
+  TRANSCENDENT
 }
 
 model UserClassState {
-  user_id                 Int            @id
-  current_tier            Int            @default(0)
-  vocation_class_id       String?        @db.VarChar(50)
-  specialization_class_id String?        @db.VarChar(50)
-  legendary_class_id      String?        @db.VarChar(50)
-  legendary_stage         ClassTierStage @default(NORMAL)
-  is_maestro_supremo      Boolean        @default(false)
-  is_leyenda              Boolean        @default(false)
-  pending_choice_tier     Int?
-  updated_at              DateTime       @default(now()) @updatedAt
+  user_id                 Int             @id
+  current_tier            Int             @default(0) @db.SmallInt
+  vocation_class_id       String?         @db.VarChar(50)
+  specialization_class_id String?         @db.VarChar(50)
+  legendary_class_id      String?         @db.VarChar(50)
+  legendary_stage         ClassTierStage?
+  is_maestro_supremo      Boolean         @default(false)
+  is_leyenda              Boolean         @default(false)
+  pending_choice_tier     Int?            @db.SmallInt
+  created_at              DateTime        @default(now())
+  updated_at              DateTime        @default(now()) @updatedAt
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
+  @@index([pending_choice_tier])
   @@map("user_class_state")
 }
 

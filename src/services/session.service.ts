@@ -473,8 +473,11 @@ export const processSession = async (
       tenacity: updatedStats.tenacity_level,
       vigor: updatedStats.vigor_level,
     });
-  } catch {
-    // Class system failure must not roll back the session.
+  } catch (err) {
+    logger.warn(
+      { err, userId },
+      'Character progression evaluation failed after session save'
+    );
   }
 
   let newMilestones: UnlockedMilestone[] = [];

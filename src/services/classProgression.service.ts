@@ -2,8 +2,6 @@
  * classProgression.service.ts — pure progression logic.
  *
  * No DB access, no side effects. All inputs explicit, all outputs derived.
- * Mirrored on the client at
- *   client/src/features/character/core/domain/services/classProgression.ts
  *
  * Tier gates:
  *   T1 → any stat ≥ 5
@@ -11,14 +9,14 @@
  *   T3 → hero ≥ 25 + dominant ≥ 35 + secondary ≥ 22
  *   T4 → min(stats) ≥ 50          (auto, transcendent form of T3)
  *   T5 → min(stats) ≥ 80          (auto, Maestro Supremo)
- *   T6 → all stats === 99         (cosmetic, Leyenda)
+ *   T6 → all stats ≥ 99           (cosmetic, Leyenda)
  *
  * Tiers 1, 2, 3 require user choice (modal). Tiers 4, 5, 6 are automatic.
  */
 
 import type {
   LegendaryClass,
-  LinageId,
+  LineageId,
   SpecializationClass,
   StatKey,
   VocationClass,
@@ -27,9 +25,7 @@ import {
   findLegendary,
   findSpecialization,
   findVocation,
-  LEGENDARIES,
-  SPECIALIZATIONS,
-  specializationsByLinage,
+  specializationsByLineage,
   STAT_KEYS,
   VOCATIONS,
 } from '../data/classes';
@@ -44,10 +40,11 @@ export interface StatLevels {
 }
 
 export const heroLevel = (stats: StatLevels): number => {
-  const allMaxed = STAT_KEYS.every((key) => stats[key] === 99);
+  // The display caps at 100 once every stat is maxed at 99 (sum/6 rounds to 99).
+  const allMaxed = STAT_KEYS.every((key) => stats[key] >= 99);
   if (allMaxed) return 100;
   const sum = STAT_KEYS.reduce((acc, key) => acc + stats[key], 0);
-  return Math.round(sum / 6);
+  return Math.round(sum / STAT_KEYS.length);
 };
 
 export const minStat = (stats: StatLevels): number =>
@@ -90,7 +87,7 @@ export const meetsT4Gate = (stats: StatLevels): boolean => minStat(stats) >= 50;
 export const meetsT5Gate = (stats: StatLevels): boolean => minStat(stats) >= 80;
 
 export const meetsT6Gate = (stats: StatLevels): boolean =>
-  STAT_KEYS.every((key) => stats[key] === 99);
+  STAT_KEYS.every((key) => stats[key] >= 99);
 
 // ───── Recommended class per tier ─────
 
@@ -108,24 +105,35 @@ export const recommendedVocation = (stats: StatLevels): VocationClass => {
 };
 
 /**
- * Recommended T2 specialization within a chosen linage = the one whose
- * secondary stat matches the user's second-highest stat.
+ * Recommended T2 specialization within a chosen lineage = the one whose
+ * secondary stat matches the user's second-highest stat. Falls back to the
+ * spec with the highest user score on its `secondaryStat` if the second-highest
+ * stat happens to match the dominant (effectively a tie at zero).
  */
 export const recommendedSpecialization = (
   stats: StatLevels,
-  linage: LinageId
+  lineage: LineageId
 ): SpecializationClass => {
-  const vocation = VOCATIONS.find((v) => v.id === linage);
-  if (!vocation) throw new Error(`Unknown linage: ${linage}`);
+  const vocation = VOCATIONS.find((v) => v.id === lineage);
+  if (!vocation) throw new Error(`Unknown lineage: ${lineage}`);
   const sec = secondaryStat(stats, vocation.dominantStat);
-  const linageSpecs = specializationsByLinage(linage);
-  const match = linageSpecs.find((s) => s.secondaryStat === sec);
-  return match ?? linageSpecs[0];
+  const lineageSpecs = specializationsByLineage(lineage);
+  const match = lineageSpecs.find((s) => s.secondaryStat === sec);
+  if (match) return match;
+
+  // Fallback: pick the spec whose secondaryStat is strongest in the user.
+  return lineageSpecs.reduce((best, candidate) =>
+    stats[candidate.secondaryStat] > stats[best.secondaryStat]
+      ? candidate
+      : best
+  );
 };
 
 /**
  * Recommended T3 legendary among a specialization's two options = the one
- * whose required stats sum highest in the user's profile.
+ * whose required stats average highest in the user's profile. Averaging
+ * (rather than summing) avoids favoring two-stat legendaries over single-stat
+ * ones when the user is much stronger in the single stat.
  */
 export const recommendedLegendary = (
   stats: StatLevels,
@@ -143,8 +151,13 @@ export const recommendedLegendary = (
     );
   }
 
-  const score = (legendary: LegendaryClass): number =>
-    legendary.requiredStats.reduce((acc, key) => acc + stats[key], 0);
+  const score = (legendary: LegendaryClass): number => {
+    const sum = legendary.requiredStats.reduce(
+      (acc, key) => acc + stats[key],
+      0
+    );
+    return sum / legendary.requiredStats.length;
+  };
 
   return score(optionA) >= score(optionB) ? optionA : optionB;
 };
@@ -154,8 +167,8 @@ export const recommendedLegendary = (
 export const availableVocations = (): readonly VocationClass[] => VOCATIONS;
 
 export const availableSpecializations = (
-  linage: LinageId
-): SpecializationClass[] => specializationsByLinage(linage);
+  lineage: LineageId
+): SpecializationClass[] => specializationsByLineage(lineage);
 
 export const availableLegendaries = (
   specializationId: string
@@ -177,7 +190,7 @@ export const canChooseSpecialization = (
   vocationId: string
 ): boolean => {
   const spec = findSpecialization(specializationId);
-  return spec !== undefined && spec.linage === vocationId;
+  return spec !== undefined && spec.lineage === vocationId;
 };
 
 export const canChooseLegendary = (
@@ -250,7 +263,7 @@ export const evaluateProgression = (
   if (state.current_tier === 2 && state.specialization_class_id) {
     const spec = findSpecialization(state.specialization_class_id);
     if (spec) {
-      const dom = findVocation(spec.linage)?.dominantStat;
+      const dom = findVocation(spec.lineage)?.dominantStat;
       if (dom && meetsT3Gate(stats, dom, spec.secondaryStat)) {
         pending = 3;
         return { pendingChoiceTier: pending, autoTierUpgrades: upgrades };
@@ -281,8 +294,4 @@ export const evaluateProgression = (
 
 // ───── Re-export the union types used by callers ─────
 
-export type { LinageId, StatKey } from '../data/classes';
-
-// Avoid lint complaints when consumer imports nothing else from here.
-void LEGENDARIES;
-void SPECIALIZATIONS;
+export type { LineageId, StatKey } from '../data/classes';

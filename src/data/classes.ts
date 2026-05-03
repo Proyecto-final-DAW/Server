@@ -4,14 +4,14 @@
  * Tier structure:
  *   T0  — ESCUDERO (start, no choice)
  *   T1  — VOCATIONS (6, one per stat)
- *   T2  — SPECIALIZATIONS (18, three per linage)
+ *   T2  — SPECIALIZATIONS (18, three per lineage)
  *   T3  — LEGENDARIES (12, each fed by 3 T2s on average)
- *   T4  — TRASCENDENTE (form upgrade of T3, no new class)
+ *   T4  — TRANSCENDENT (form upgrade of T3, no new class)
  *   T5  — MAESTRO SUPREMO (single endgame class)
  *   T6  — LEYENDA (cosmetic title, all stats = 99)
  *
- * Same data is mirrored in `client/src/features/character/data/classes.ts`.
- * If you change anything here, mirror it on the client.
+ * The client consumes this catalog through `GET /character/catalog` — there is
+ * no client-side mirror to keep in sync.
  */
 
 export type StatKey =
@@ -31,7 +31,7 @@ export const STAT_KEYS: readonly StatKey[] = [
   'vigor',
 ] as const;
 
-export type LinageId =
+export type LineageId =
   | 'GUERRERO'
   | 'PALADIN'
   | 'CAZADOR'
@@ -49,7 +49,7 @@ export interface NoviceClass {
 }
 
 export interface VocationClass {
-  id: LinageId;
+  id: LineageId;
   tier: 1;
   name: string;
   frase: string;
@@ -61,7 +61,7 @@ export interface SpecializationClass {
   tier: 2;
   name: string;
   frase: string;
-  linage: LinageId;
+  lineage: LineageId;
   secondaryStat: StatKey;
   legendaryOptions: readonly [string, string];
 }
@@ -73,8 +73,8 @@ export interface LegendaryClass {
   frase: string;
   iconHint: string;
   requiredStats: readonly StatKey[];
-  trascendenteName: string;
-  trascendenteFrase: string;
+  transcendentName: string;
+  transcendentFrase: string;
 }
 
 export interface SupremoClass {
@@ -158,7 +158,7 @@ export const SPECIALIZATIONS: readonly SpecializationClass[] = [
     tier: 2,
     name: 'Berserker',
     frase: 'Solo deja de luchar cuando ya no queda enemigo.',
-    linage: 'GUERRERO',
+    lineage: 'GUERRERO',
     secondaryStat: 'endurance',
     legendaryOptions: ['CABALLERO_APOCALIPTICO', 'HERALDO'],
   },
@@ -167,7 +167,7 @@ export const SPECIALIZATIONS: readonly SpecializationClass[] = [
     tier: 2,
     name: 'Duelista',
     frase: 'Cien aceros han bailado con el suyo. Ninguno volvió.',
-    linage: 'GUERRERO',
+    lineage: 'GUERRERO',
     secondaryStat: 'agility',
     legendaryOptions: ['TITAN', 'VENGADOR'],
   },
@@ -176,7 +176,7 @@ export const SPECIALIZATIONS: readonly SpecializationClass[] = [
     tier: 2,
     name: 'Mercenario',
     frase: 'Su acero al mejor postor. Su honor, a nadie.',
-    linage: 'GUERRERO',
+    lineage: 'GUERRERO',
     secondaryStat: 'stamina',
     legendaryOptions: ['TITAN', 'CAMINANTE_ETERNO'],
   },
@@ -186,7 +186,7 @@ export const SPECIALIZATIONS: readonly SpecializationClass[] = [
     tier: 2,
     name: 'Cruzado',
     frase: 'Su mandoble bautiza. Su fe, condena.',
-    linage: 'PALADIN',
+    lineage: 'PALADIN',
     secondaryStat: 'strength',
     legendaryOptions: ['CABALLERO_APOCALIPTICO', 'INMORTAL'],
   },
@@ -195,7 +195,7 @@ export const SPECIALIZATIONS: readonly SpecializationClass[] = [
     tier: 2,
     name: 'Templario',
     frase: 'El juramento que pronunció arde aún en su pecho.',
-    linage: 'PALADIN',
+    lineage: 'PALADIN',
     secondaryStat: 'vigor',
     legendaryOptions: ['INMORTAL', 'PROFETA'],
   },
@@ -204,7 +204,7 @@ export const SPECIALIZATIONS: readonly SpecializationClass[] = [
     tier: 2,
     name: 'Guardián',
     frase: 'Detrás de él, el mundo respira.',
-    linage: 'PALADIN',
+    lineage: 'PALADIN',
     secondaryStat: 'tenacity',
     legendaryOptions: ['HIEROFANTE', 'INMORTAL'],
   },
@@ -214,7 +214,7 @@ export const SPECIALIZATIONS: readonly SpecializationClass[] = [
     tier: 2,
     name: 'Explorador',
     frase: 'Dibuja los mapas que aún no existen.',
-    linage: 'CAZADOR',
+    lineage: 'CAZADOR',
     secondaryStat: 'agility',
     legendaryOptions: ['ARCHIDRUIDA', 'HERALDO'],
   },
@@ -223,7 +223,7 @@ export const SPECIALIZATIONS: readonly SpecializationClass[] = [
     tier: 2,
     name: 'Trampero',
     frase: 'Cuando lo escuchas, ya estás dentro de su trampa.',
-    linage: 'CAZADOR',
+    lineage: 'CAZADOR',
     secondaryStat: 'tenacity',
     legendaryOptions: ['CAMINANTE_ETERNO', 'HIEROFANTE'],
   },
@@ -232,7 +232,7 @@ export const SPECIALIZATIONS: readonly SpecializationClass[] = [
     tier: 2,
     name: 'Montaraz',
     frase: 'Las bestias huyen de él. Los hombres también deberían.',
-    linage: 'CAZADOR',
+    lineage: 'CAZADOR',
     secondaryStat: 'vigor',
     legendaryOptions: ['ARCHIDRUIDA', 'PROFETA'],
   },
@@ -242,7 +242,7 @@ export const SPECIALIZATIONS: readonly SpecializationClass[] = [
     tier: 2,
     name: 'Asesino',
     frase: 'Tu última palabra será su nombre. Si te da tiempo.',
-    linage: 'PICARO',
+    lineage: 'PICARO',
     secondaryStat: 'strength',
     legendaryOptions: ['VENGADOR', 'NEMESIS'],
   },
@@ -251,7 +251,7 @@ export const SPECIALIZATIONS: readonly SpecializationClass[] = [
     tier: 2,
     name: 'Sombra',
     frase: 'No verás de dónde viene. Solo a dónde lleva.',
-    linage: 'PICARO',
+    lineage: 'PICARO',
     secondaryStat: 'stamina',
     legendaryOptions: ['NEMESIS', 'HERALDO'],
   },
@@ -260,7 +260,7 @@ export const SPECIALIZATIONS: readonly SpecializationClass[] = [
     tier: 2,
     name: 'Cazarrecompensas',
     frase: 'Te persigue desde antes de que supieras huir.',
-    linage: 'PICARO',
+    lineage: 'PICARO',
     secondaryStat: 'tenacity',
     legendaryOptions: ['VENGADOR', 'CAMINANTE_ETERNO'],
   },
@@ -270,7 +270,7 @@ export const SPECIALIZATIONS: readonly SpecializationClass[] = [
     tier: 2,
     name: 'Sacerdote',
     frase: 'Reza con el cuerpo. Y el cuerpo le obedece.',
-    linage: 'MONJE',
+    lineage: 'MONJE',
     secondaryStat: 'vigor',
     legendaryOptions: ['AVATAR', 'PROFETA'],
   },
@@ -279,7 +279,7 @@ export const SPECIALIZATIONS: readonly SpecializationClass[] = [
     tier: 2,
     name: 'Inquisidor',
     frase: 'Su mirada quema lo que su acero no alcanza.',
-    linage: 'MONJE',
+    lineage: 'MONJE',
     secondaryStat: 'endurance',
     legendaryOptions: ['HIEROFANTE', 'AVATAR'],
   },
@@ -288,7 +288,7 @@ export const SPECIALIZATIONS: readonly SpecializationClass[] = [
     tier: 2,
     name: 'Redentor',
     frase: 'Carga el peso de los que cayeron antes que él.',
-    linage: 'MONJE',
+    lineage: 'MONJE',
     secondaryStat: 'strength',
     legendaryOptions: ['CONQUISTADOR', 'CABALLERO_APOCALIPTICO'],
   },
@@ -298,7 +298,7 @@ export const SPECIALIZATIONS: readonly SpecializationClass[] = [
     tier: 2,
     name: 'Domador',
     frase: 'Lo que ruge en el bosque, le llama padre.',
-    linage: 'DRUIDA',
+    lineage: 'DRUIDA',
     secondaryStat: 'strength',
     legendaryOptions: ['CONQUISTADOR', 'INMORTAL'],
   },
@@ -307,7 +307,7 @@ export const SPECIALIZATIONS: readonly SpecializationClass[] = [
     tier: 2,
     name: 'Chamán',
     frase: 'Las voces que oye, otros las sufren como pesadillas.',
-    linage: 'DRUIDA',
+    lineage: 'DRUIDA',
     secondaryStat: 'agility',
     legendaryOptions: ['ARCHIDRUIDA', 'NEMESIS'],
   },
@@ -316,7 +316,7 @@ export const SPECIALIZATIONS: readonly SpecializationClass[] = [
     tier: 2,
     name: 'Sabio',
     frase: 'Lee tu cuerpo como un libro que tú no sabes leer.',
-    linage: 'DRUIDA',
+    lineage: 'DRUIDA',
     secondaryStat: 'tenacity',
     legendaryOptions: ['AVATAR', 'ARCHIDRUIDA'],
   },
@@ -330,8 +330,8 @@ export const LEGENDARIES: readonly LegendaryClass[] = [
     frase: 'Los dioses lo enterraron. La tierra lo devolvió.',
     iconHint: '⚔',
     requiredStats: ['strength'],
-    trascendenteName: 'Primordial',
-    trascendenteFrase: 'Antes del verbo, ya tenía nombre.',
+    transcendentName: 'Primordial',
+    transcendentFrase: 'Antes del verbo, ya tenía nombre.',
   },
   {
     id: 'CABALLERO_APOCALIPTICO',
@@ -340,8 +340,8 @@ export const LEGENDARIES: readonly LegendaryClass[] = [
     frase: 'El primero de los cuatro. Y el más cruel.',
     iconHint: '🗡',
     requiredStats: ['strength', 'endurance'],
-    trascendenteName: 'Apocalipsis',
-    trascendenteFrase: 'El día final ya ha sido escrito. Con su sangre.',
+    transcendentName: 'Apocalipsis',
+    transcendentFrase: 'El día final ya ha sido escrito. Con su sangre.',
   },
   {
     id: 'INMORTAL',
@@ -350,8 +350,8 @@ export const LEGENDARIES: readonly LegendaryClass[] = [
     frase: 'Vio nacer reinos. Verá morir los que aún no nacen.',
     iconHint: '♾',
     requiredStats: ['endurance', 'vigor'],
-    trascendenteName: 'Leviatán',
-    trascendenteFrase:
+    transcendentName: 'Leviatán',
+    transcendentFrase:
       'Bajo las olas duerme. Cuando despierta, el mar se vacía.',
   },
   {
@@ -361,8 +361,8 @@ export const LEGENDARIES: readonly LegendaryClass[] = [
     frase: 'Tiene una lista. Tu nombre está en ella. En tinta.',
     iconHint: '🌑',
     requiredStats: ['agility', 'stamina'],
-    trascendenteName: 'Perdición',
-    trascendenteFrase: 'Pronunciar su nombre es renunciar al tuyo.',
+    transcendentName: 'Perdición',
+    transcendentFrase: 'Pronunciar su nombre es renunciar al tuyo.',
   },
   {
     id: 'AVATAR',
@@ -371,8 +371,8 @@ export const LEGENDARIES: readonly LegendaryClass[] = [
     frase: 'Lo divino tomó forma humana. Y se cansó del cielo.',
     iconHint: '☯',
     requiredStats: ['vigor', 'tenacity'],
-    trascendenteName: 'Deidad',
-    trascendenteFrase: 'Los dioses muertos murmuran su nombre con miedo.',
+    transcendentName: 'Deidad',
+    transcendentFrase: 'Los dioses muertos murmuran su nombre con miedo.',
   },
   {
     id: 'HIEROFANTE',
@@ -381,8 +381,8 @@ export const LEGENDARIES: readonly LegendaryClass[] = [
     frase: 'Guarda verdades que matarían a quien las pronunciase.',
     iconHint: '☥',
     requiredStats: ['tenacity', 'endurance'],
-    trascendenteName: 'Patriarca',
-    trascendenteFrase: 'Su silencio condena. Su palabra crea ley.',
+    transcendentName: 'Patriarca',
+    transcendentFrase: 'Su silencio condena. Su palabra crea ley.',
   },
   {
     id: 'ARCHIDRUIDA',
@@ -391,8 +391,8 @@ export const LEGENDARIES: readonly LegendaryClass[] = [
     frase: 'Las raíces le obedecen. El cielo escucha.',
     iconHint: '🌿',
     requiredStats: ['vigor', 'stamina'],
-    trascendenteName: 'Primarca',
-    trascendenteFrase: 'El bosque despertó porque él lo soñó.',
+    transcendentName: 'Primarca',
+    transcendentFrase: 'El bosque despertó porque él lo soñó.',
   },
   {
     id: 'VENGADOR',
@@ -401,8 +401,8 @@ export const LEGENDARIES: readonly LegendaryClass[] = [
     frase: 'No olvida. No perdona. No falla.',
     iconHint: '⚡',
     requiredStats: ['strength', 'agility'],
-    trascendenteName: 'Justiciero',
-    trascendenteFrase: 'La balanza está en su mano. Tu nombre, en su lista.',
+    transcendentName: 'Justiciero',
+    transcendentFrase: 'La balanza está en su mano. Tu nombre, en su lista.',
   },
   {
     id: 'HERALDO',
@@ -411,8 +411,8 @@ export const LEGENDARIES: readonly LegendaryClass[] = [
     frase: 'Su trompeta no anuncia el fin. Lo abre.',
     iconHint: '🛡',
     requiredStats: ['endurance', 'stamina'],
-    trascendenteName: 'Arcángel',
-    trascendenteFrase: 'Su última batalla fue contra Dios. Y Dios se rindió.',
+    transcendentName: 'Arcángel',
+    transcendentFrase: 'Su última batalla fue contra Dios. Y Dios se rindió.',
   },
   {
     id: 'PROFETA',
@@ -421,8 +421,8 @@ export const LEGENDARIES: readonly LegendaryClass[] = [
     frase: 'Vio el final antes que el principio.',
     iconHint: '🌟',
     requiredStats: ['tenacity', 'vigor'],
-    trascendenteName: 'Mesías',
-    trascendenteFrase: 'La profecía se cansó de esperar. Ahora camina.',
+    transcendentName: 'Mesías',
+    transcendentFrase: 'La profecía se cansó de esperar. Ahora camina.',
   },
   {
     id: 'CONQUISTADOR',
@@ -431,8 +431,8 @@ export const LEGENDARIES: readonly LegendaryClass[] = [
     frase: 'Donde planta su estandarte, cae un imperio.',
     iconHint: '👑',
     requiredStats: ['strength', 'vigor'],
-    trascendenteName: 'Emperador',
-    trascendenteFrase: 'Reyes lloran. Imperios caen. Él sigue.',
+    transcendentName: 'Emperador',
+    transcendentFrase: 'Reyes lloran. Imperios caen. Él sigue.',
   },
   {
     id: 'CAMINANTE_ETERNO',
@@ -441,8 +441,8 @@ export const LEGENDARIES: readonly LegendaryClass[] = [
     frase: 'Lleva andando desde antes que los caminos existieran.',
     iconHint: '🧭',
     requiredStats: ['stamina', 'tenacity'],
-    trascendenteName: 'Exiliado',
-    trascendenteFrase: 'El mundo lo desterró. Ahora lo recorre como dueño.',
+    transcendentName: 'Exiliado',
+    transcendentFrase: 'El mundo lo desterró. Ahora lo recorre como dueño.',
   },
 ] as const;
 
@@ -481,6 +481,7 @@ export const isValidSpecializationId = (id: string): boolean =>
 export const isValidLegendaryId = (id: string): boolean =>
   LEGENDARIES.some((l) => l.id === id);
 
-export const specializationsByLinage = (
-  linage: LinageId
-): SpecializationClass[] => SPECIALIZATIONS.filter((s) => s.linage === linage);
+export const specializationsByLineage = (
+  lineage: LineageId
+): SpecializationClass[] =>
+  SPECIALIZATIONS.filter((s) => s.lineage === lineage);

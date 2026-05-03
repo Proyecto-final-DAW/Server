@@ -1,4 +1,4 @@
-export type ClassTierStage = 'NORMAL' | 'TRASCENDENTE';
+export type ClassTierStage = 'NORMAL' | 'TRANSCENDENT';
 
 export interface UserClassState {
   user_id: number;
@@ -6,9 +6,10 @@ export interface UserClassState {
   vocation_class_id: string | null;
   specialization_class_id: string | null;
   legendary_class_id: string | null;
-  legendary_stage: ClassTierStage;
+  legendary_stage: ClassTierStage | null;
   is_maestro_supremo: boolean;
   is_leyenda: boolean;
   pending_choice_tier: number | null;
+  created_at: Date;
   updated_at: Date;
 }
