@@ -6,6 +6,7 @@ import type {
   Session,
   SessionExercise,
 } from '../models/Session';
+import { logger } from '../utils/logger';
 import * as milestoneService from './milestone.service';
 import { applyGains, calculateGains } from './progression.service';
 import * as statsService from './stats.service';
@@ -486,8 +487,9 @@ export const processSession = async (
     ]);
 
     newMilestones = milestoneChecks.flat();
-  } catch {
-    // Milestone check failed — session and stats are already saved
+  } catch (err) {
+    // Milestone check failed — session and stats are already saved.
+    logger.warn({ err, userId }, 'Milestone check failed after session save');
   }
 
   return { session, stats: updatedStats, newMilestones };
