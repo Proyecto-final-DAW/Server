@@ -92,3 +92,39 @@ export function calculateStreak(
     changed: true,
   };
 }
+
+export interface StreakStatus {
+  currentStreak: number;
+  hoursRemaining: number;
+  isAtRisk: boolean;
+}
+
+/**
+ * Computes how much time the user has left before losing the current streak.
+ *
+ * The streak is alive while the next session occurs within 1 calendar day of
+ * `last_session_date`. The deadline is therefore the start of
+ * `last_session_date + 2 days` (UTC). Any moment after that, the next session
+ * resets the streak to 1.
+ *
+ * `isAtRisk` is true when there is an active streak and 24h or less remain.
+ */
+export function calculateStreakStatus(
+  state: Pick<StreakState, 'streak' | 'last_session_date'>,
+  now: Date = new Date()
+): StreakStatus {
+  if (state.streak <= 0 || !state.last_session_date) {
+    return { currentStreak: 0, hoursRemaining: 0, isAtRisk: false };
+  }
+
+  const lastDay = toDateOnly(state.last_session_date);
+  const deadline = new Date(lastDay.getTime() + 2 * 86_400_000);
+  const msRemaining = deadline.getTime() - now.getTime();
+  const hoursRemaining = Math.max(0, Math.ceil(msRemaining / 3_600_000));
+
+  return {
+    currentStreak: state.streak,
+    hoursRemaining,
+    isAtRisk: hoursRemaining > 0 && hoursRemaining <= 24,
+  };
+}
