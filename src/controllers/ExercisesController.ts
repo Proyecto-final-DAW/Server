@@ -2,8 +2,21 @@ import { Request, Response } from 'express';
 
 import * as exerciseService from '../services/exercise.service';
 
+// Bounded in-process cache. Even with auth on the route, an authenticated
+// user can hit thousands of distinct exercise IDs and balloon process memory
+// — capping at MAX_ENTRIES with insertion-order eviction (Map iterates in
+// insertion order) keeps the worst case O(MAX_ENTRIES * avg_image_size).
+const IMAGE_CACHE_TTL = 30 * 60 * 1000;
+const IMAGE_CACHE_MAX_ENTRIES = 500;
 const imageCache = new Map<string, { data: Buffer; timestamp: number }>();
-const IMAGE_CACHE_TTL = 30 * 60 * 1000; // 30 minutos
+
+const evictIfFull = (): void => {
+  while (imageCache.size >= IMAGE_CACHE_MAX_ENTRIES) {
+    const oldest = imageCache.keys().next().value;
+    if (oldest === undefined) break;
+    imageCache.delete(oldest);
+  }
+};
 
 const ExercisesController = {
   async search(req: Request, res: Response) {
@@ -46,6 +59,7 @@ const ExercisesController = {
 
       const imageBuffer = await exerciseService.getExerciseImage(id);
 
+      evictIfFull();
       imageCache.set(id, { data: imageBuffer, timestamp: Date.now() });
 
       res.setHeader('Content-Type', 'image/gif');

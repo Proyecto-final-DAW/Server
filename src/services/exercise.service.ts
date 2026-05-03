@@ -139,7 +139,9 @@ export const searchExercises = async (
 
 export const getExerciseImage = async (exerciseId: string): Promise<Buffer> => {
   const apiKey = process.env.EXERCISEDB_API_KEY ?? '';
-  const url = `${EXERCISEDB_BASE_URL}/image?exerciseId=${encodeURIComponent(exerciseId)}&resolution=180&rapidapi-key=${apiKey}`;
+  // The API key MUST only travel in the header — putting it in the query
+  // string leaks it to access logs of any intermediate proxy / CDN / WAF.
+  const url = `${EXERCISEDB_BASE_URL}/image?exerciseId=${encodeURIComponent(exerciseId)}&resolution=180`;
 
   const response = await fetch(url, {
     headers: {

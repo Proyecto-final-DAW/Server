@@ -256,6 +256,30 @@ const UserController = {
       });
     }
   },
+
+  async getStatsForCurrentUser(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: 'Not authorized' });
+      }
+
+      const stats = await statsService.findByUserId(userId);
+      if (!stats) {
+        return res
+          .status(404)
+          .json({ message: 'Stats not found. Complete onboarding first.' });
+      }
+
+      return res.status(200).json(stats);
+    } catch (err: unknown) {
+      const error = err as Error;
+      return res.status(500).json({
+        message: 'Failed to get stats',
+        error: error?.message || String(err),
+      });
+    }
+  },
 };
 
 export default UserController;

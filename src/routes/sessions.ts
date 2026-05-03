@@ -15,6 +15,7 @@ router.post(
   SessionController.create
 );
 router.get('/weekly-summary', authentication, SessionController.weeklySummary);
+router.get('/history', authentication, SessionController.getHistory);
 router.get('/detail/:sessionId', authentication, SessionController.getDetail);
 router.get('/:userId', authentication, ensureSelf(), SessionController.getAll);
 
