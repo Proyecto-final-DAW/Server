@@ -5,11 +5,18 @@ import { authentication } from '../middlewares/auth';
 
 const router = express.Router();
 
-// Both endpoints proxy a paid third-party API (ExerciseDB on RapidAPI).
-// Without authentication they are an open quota-drain surface for anyone
-// on the internet — and the image route additionally fills an in-process
-// cache keyed by arbitrary strings.
+// Search proxies a paid third-party API (ExerciseDB on RapidAPI). Keep it
+// behind authentication so the quota can only be drained by signed-in users
+// who are bounded by globalRateLimit/globalSlowdown.
 router.get('/', authentication, ExercisesController.search);
-router.get('/image/:id', authentication, ExercisesController.image);
+
+// The image endpoint must remain unauthenticated: browsers cannot attach a
+// Bearer token to <img src=...> requests, so authenticating here would break
+// every exercise thumbnail in the UI. The API key is never exposed (it
+// travels only in server-side request headers, see exercise.service.ts), and
+// the in-process cache is bounded (see ExercisesController) so the blast
+// radius of an unauthenticated visitor enumerating IDs is limited to the
+// upstream RapidAPI cost — already mitigated by the 30-minute TTL.
+router.get('/image/:id', ExercisesController.image);
 
 export default router;
