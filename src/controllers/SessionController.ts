@@ -7,6 +7,7 @@ import {
   ExerciseType,
 } from '../models/Session';
 import * as sessionService from '../services/session.service';
+import { logger } from '../utils/logger';
 import { AuthRequest } from './UserController';
 
 const VALID_TYPES: ExerciseType[] = [
@@ -137,7 +138,8 @@ const SessionController = {
         limit: limit !== undefined && !Number.isNaN(limit) ? limit : undefined,
       });
       return res.status(200).json(result);
-    } catch {
+    } catch (err) {
+      logger.error({ err, userId: req.user?.id }, 'Failed to fetch sessions');
       return res.status(500).json({ message: 'Failed to fetch sessions' });
     }
   },
@@ -160,7 +162,11 @@ const SessionController = {
       }
 
       return res.status(200).json(session);
-    } catch {
+    } catch (err) {
+      logger.error(
+        { err, userId: req.user?.id, sessionId: req.params.sessionId },
+        'Failed to fetch session detail'
+      );
       return res
         .status(500)
         .json({ message: 'Failed to fetch session detail' });

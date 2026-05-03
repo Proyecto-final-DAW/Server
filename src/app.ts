@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express, { NextFunction, Request, Response } from 'express';
@@ -18,6 +17,7 @@ import routinesRouter from './routes/routines';
 import sessionsRouter from './routes/sessions';
 import statsRouter from './routes/stats';
 import usersRouter from './routes/users';
+import { logger } from './utils/logger';
 
 export function createApp() {
   const nodeEnv = process.env.NODE_ENV || 'development';
@@ -69,8 +69,7 @@ export function createApp() {
     .map((o) => o.trim())
     .filter(Boolean);
 
-  console.log(`[env] NODE_ENV=${nodeEnv}`);
-  console.log(`[env] CORS_ORIGIN=${corsOriginEnv}`);
+  logger.info({ nodeEnv, corsOrigin: corsOriginEnv }, 'env loaded');
 
   app.use(
     cors({
@@ -147,8 +146,9 @@ export function createApp() {
       };
       const status = maybe.statusCode ?? maybe.status;
       if (status === 413 || maybe.type === 'entity.too.large') {
-        console.warn(
-          `[payload] 413 entity.too.large (json=${requestBodyLimit}, urlencoded=${urlencodedBodyLimit})`
+        logger.warn(
+          { json: requestBodyLimit, urlencoded: urlencodedBodyLimit },
+          'payload too large'
         );
         return res.status(413).json({
           message: 'Payload too large',
