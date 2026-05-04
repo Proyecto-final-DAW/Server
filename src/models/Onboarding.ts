@@ -25,7 +25,7 @@ export interface OnboardingFormData {
   activityLevel?: ActivityLevel;
   goals?: Goal[];
   experienceLevel?: ExperienceLevel;
-  equipment?: Equipment;
+  equipment?: Equipment[];
   daysPerWeek?: DaysPerWeek;
   injuries?: Injury[];
 }

@@ -33,15 +33,22 @@ const setCache = (key: string, data: Exercise[]): void => {
   cache.set(key, { data, timestamp: Date.now() });
 };
 
+// ExerciseDB returns the gif as a fully-qualified `gifUrl` in the search
+// response itself. Prefer that — it points to the public CDN and works
+// without an extra proxy hop. Fall back to our /exercises/image/:id proxy
+// only if the upstream omits the field (older API versions).
 const mapExercises = (data: Record<string, unknown>[]): Exercise[] =>
-  data.map((e) => ({
-    id: e.id as string,
-    name: e.name as string,
-    target: e.target as string,
-    equipment: e.equipment as string,
-    difficulty: e.difficulty as string,
-    imageUrl: `/exercises/image/${e.id as string}`,
-  }));
+  data.map((e) => {
+    const gifUrl = typeof e.gifUrl === 'string' ? e.gifUrl : '';
+    return {
+      id: e.id as string,
+      name: e.name as string,
+      target: e.target as string,
+      equipment: e.equipment as string,
+      difficulty: e.difficulty as string,
+      imageUrl: gifUrl || `/exercises/image/${e.id as string}`,
+    };
+  });
 
 const fetchFromExerciseDB = async (url: string): Promise<Exercise[]> => {
   const cached = getCached(url);

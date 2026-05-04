@@ -1,6 +1,7 @@
 import pool from '../db/pool';
 import { resolveMacroInputs } from '../utils/macroProfile';
 import { calculateCalories, MacroTargets } from './macros.service';
+import { normalizeUserRow } from './user.service';
 
 function throwCoded(message: string, code: string): never {
   const err = new Error(message);
@@ -31,10 +32,15 @@ export async function getCurrentMacros(userId: number): Promise<MacroTargets> {
     [userId]
   );
 
-  const user = result.rows[0];
-  if (!user) {
+  const rawUser = result.rows[0];
+  if (!rawUser) {
     throwCoded('USER_NOT_FOUND', 'USER_NOT_FOUND');
   }
+
+  // Normalize Postgres enum-array columns (goals, injuries, equipment) into
+  // JS arrays. Without this, `Array.isArray(user.goals)` in resolveMacroInputs
+  // would fail and every diet request would 404 with ONBOARDING_INCOMPLETE.
+  const user = normalizeUserRow(rawUser);
 
   const inputs = user.onboarding_completed ? resolveMacroInputs(user) : null;
   if (!inputs) {

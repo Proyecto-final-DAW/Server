@@ -19,6 +19,8 @@ const experienceLevelSchema = z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED']);
 
 const equipmentSchema = z.enum(['FULL_GYM', 'HOME_WEIGHTS', 'BODYWEIGHT']);
 
+const daysPerWeekSchema = z.enum(['2-3', '4-5', '6+']);
+
 const injurySchema = z.enum(['NONE', 'KNEE', 'BACK', 'SHOULDER', 'OTHER']);
 
 /**
@@ -46,11 +48,8 @@ export const submitOnboardingSchema = z
     activityLevel: activityLevelSchema.optional(),
     goals: z.array(goalSchema).optional(),
     experienceLevel: experienceLevelSchema.optional(),
-    equipment: equipmentSchema.optional(),
-    daysPerWeek: z
-      .string()
-      .max(10, 'daysPerWeek must be at most 10 characters')
-      .optional(),
+    equipment: z.array(equipmentSchema).optional(),
+    daysPerWeek: daysPerWeekSchema.optional(),
     injuries: z.array(injurySchema).optional(),
   })
   .strict();

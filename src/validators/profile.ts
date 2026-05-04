@@ -62,7 +62,7 @@ export const updateProfileSchema = z
       .optional(),
     sex: sexSchema.optional(),
     experience_level: experienceLevelSchema.optional(),
-    equipment: equipmentSchema.optional(),
+    equipment: z.array(equipmentSchema).optional(),
     days_per_week: daysPerWeekSchema.optional(),
     injuries: z.array(injurySchema).optional(),
   })
