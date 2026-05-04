@@ -1,6 +1,7 @@
 import pool from '../db/pool';
 import { resolveMacroInputs } from '../utils/macroProfile';
 import { calculateCalories, MacroTargets } from './macros.service';
+import { normalizeUserRow } from './user.service';
 
 function throwCoded(message: string, code: string): never {
   const err = new Error(message);
@@ -20,17 +21,26 @@ function throwCoded(message: string, code: string): never {
  * or is missing any macro input.
  */
 export async function getCurrentMacros(userId: number): Promise<MacroTargets> {
+  // `birth_date` (not `age`) is what resolveMacroInputs reads to compute
+  // the Mifflin–St Jeor age input — selecting only `age` made every diet
+  // request 404 with ONBOARDING_INCOMPLETE because birth_date came back
+  // as undefined.
   const result = await pool.query(
-    `SELECT onboarding_completed, weight, height, age, sex, activity_level, goals,
+    `SELECT onboarding_completed, weight, height, birth_date, sex, activity_level, goals,
             daily_calories, protein_grams, fat_grams, carb_grams
        FROM users WHERE id = $1`,
     [userId]
   );
 
-  const user = result.rows[0];
-  if (!user) {
+  const rawUser = result.rows[0];
+  if (!rawUser) {
     throwCoded('USER_NOT_FOUND', 'USER_NOT_FOUND');
   }
+
+  // Normalize Postgres enum-array columns (goals, injuries, equipment) into
+  // JS arrays. Without this, `Array.isArray(user.goals)` in resolveMacroInputs
+  // would fail and every diet request would 404 with ONBOARDING_INCOMPLETE.
+  const user = normalizeUserRow(rawUser);
 
   const inputs = user.onboarding_completed ? resolveMacroInputs(user) : null;
   if (!inputs) {

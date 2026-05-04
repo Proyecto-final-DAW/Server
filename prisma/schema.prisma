@@ -66,7 +66,7 @@ model User {
   activity_level       String?          @db.VarChar(100)
   goals                Goal[]           @default([])
   experience_level     ExperienceLevel?
-  equipment            Equipment?
+  equipment            Equipment[]      @default([])
   days_per_week        String?          @db.VarChar(10)
   injuries             Injury[]         @default([])
   sleep_hours          Int?

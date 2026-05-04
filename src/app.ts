@@ -35,7 +35,6 @@ export function createApp() {
     'PORT',
     'CORS_ORIGIN',
     'JWT_EXPIRES_IN',
-    'EXERCISEDB_API_KEY',
   ];
 
   // In Netlify Functions, PORT is not used (there is no long-lived listener).
