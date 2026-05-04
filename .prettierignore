@@ -28,3 +28,6 @@ eslint.config.mjs
 *.prisma
 prisma/migrations
 prisma/@prisma
+
+# Vendored datasets (free-exercise-db, MIT) — keep upstream formatting
+src/data/exercises.json

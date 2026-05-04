@@ -13,6 +13,16 @@ const activityLevelSchema = z.enum([
   'VERY_ACTIVE',
 ]);
 
+const experienceLevelSchema = z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED']);
+
+const equipmentSchema = z.enum(['FULL_GYM', 'HOME_WEIGHTS', 'BODYWEIGHT']);
+
+const daysPerWeekSchema = z.enum(['2-3', '4-5', '6+']);
+
+const injurySchema = z.enum(['NONE', 'KNEE', 'BACK', 'SHOULDER', 'OTHER']);
+
+const sexSchema = z.enum(['MALE', 'FEMALE', 'NON_BINARY']);
+
 /**
  * Body for `PUT /profile/me`. All fields are optional; the service whitelists
  * which columns to update. Only fields actually present in the request are
@@ -50,6 +60,11 @@ export const updateProfileSchema = z
       .min(0, 'sleep_hours must be 0 or more')
       .max(24, 'sleep_hours must be at most 24')
       .optional(),
+    sex: sexSchema.optional(),
+    experience_level: experienceLevelSchema.optional(),
+    equipment: z.array(equipmentSchema).optional(),
+    days_per_week: daysPerWeekSchema.optional(),
+    injuries: z.array(injurySchema).optional(),
   })
   .strict();
 
