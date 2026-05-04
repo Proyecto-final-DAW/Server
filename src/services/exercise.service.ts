@@ -1,7 +1,10 @@
-const EXERCISEDB_BASE_URL = 'https://exercisedb.p.rapidapi.com';
+import fs from 'node:fs';
+import path from 'node:path';
 
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
-const DEFAULT_LIMIT = 4;
+const FREE_EXERCISE_DB_BASE =
+  'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
+
+const DEFAULT_LIMIT = 9;
 
 export interface Exercise {
   id: string;
@@ -12,125 +15,61 @@ export interface Exercise {
   imageUrl: string;
 }
 
-interface CacheEntry {
-  data: Exercise[];
-  timestamp: number;
+interface RawEntry {
+  id: string;
+  name: string;
+  primaryMuscles?: string[];
+  equipment?: string | null;
+  level?: string;
+  images?: string[];
 }
 
-const cache = new Map<string, CacheEntry>();
-
-const getCached = (key: string): Exercise[] | null => {
-  const entry = cache.get(key);
-  if (!entry) return null;
-  if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
-    cache.delete(key);
-    return null;
-  }
-  return entry.data;
+// The client filter dropdown still uses the legacy ExerciseDB muscle
+// vocabulary (pectorals, delts, abs, quads). free-exercise-db's
+// `primaryMuscles` uses chest / shoulders / abdominals / quadriceps —
+// translate at the boundary so the client doesn't need to change.
+const MUSCLE_ALIASES: Record<string, string> = {
+  pectorals: 'chest',
+  delts: 'shoulders',
+  abs: 'abdominals',
+  quads: 'quadriceps',
 };
 
-const setCache = (key: string, data: Exercise[]): void => {
-  cache.set(key, { data, timestamp: Date.now() });
+// Resolved against process.cwd() instead of __dirname because tsc does not
+// copy non-.ts assets into dist/. npm scripts (`dev`, `start`) both run from
+// the Server/ root, so cwd points at the project root in dev (tsx) and prod
+// (node dist/) alike.
+const datasetPath = path.join(process.cwd(), 'data', 'exercises.json');
+
+const rawDataset = JSON.parse(
+  fs.readFileSync(datasetPath, 'utf-8')
+) as RawEntry[];
+
+const dataset: Exercise[] = rawDataset.map((entry) => ({
+  id: entry.id,
+  name: entry.name,
+  target: entry.primaryMuscles?.[0] ?? '',
+  equipment: entry.equipment ?? 'body only',
+  difficulty: entry.level ?? 'beginner',
+  imageUrl: entry.images?.[0]
+    ? `${FREE_EXERCISE_DB_BASE}${entry.images[0]}`
+    : '',
+}));
+
+const matchesSearch = (exercise: Exercise, search: string): boolean =>
+  exercise.name.toLowerCase().includes(search.toLowerCase());
+
+const matchesMuscle = (exercise: Exercise, muscle: string): boolean => {
+  const target = (MUSCLE_ALIASES[muscle.toLowerCase()] ?? muscle).toLowerCase();
+  return exercise.target.toLowerCase() === target;
 };
 
-// ExerciseDB returns the gif as a fully-qualified `gifUrl` in the search
-// response itself. Prefer that — it points to the public CDN and works
-// without an extra proxy hop. Fall back to our /exercises/image/:id proxy
-// only if the upstream omits the field (older API versions).
-const mapExercises = (data: Record<string, unknown>[]): Exercise[] =>
-  data.map((e) => {
-    const gifUrl = typeof e.gifUrl === 'string' ? e.gifUrl : '';
-    return {
-      id: e.id as string,
-      name: e.name as string,
-      target: e.target as string,
-      equipment: e.equipment as string,
-      difficulty: e.difficulty as string,
-      imageUrl: gifUrl || `/exercises/image/${e.id as string}`,
-    };
-  });
-
-const fetchFromExerciseDB = async (url: string): Promise<Exercise[]> => {
-  const cached = getCached(url);
-  if (cached) return cached;
-
-  const headers = {
-    'x-rapidapi-key': process.env.EXERCISEDB_API_KEY ?? '',
-    'x-rapidapi-host': 'exercisedb.p.rapidapi.com',
-  };
-
-  const response = await fetch(url, { headers });
-
-  if (!response.ok) {
-    throw new Error(`ExerciseDB error: ${response.status}`);
-  }
-
-  const data = (await response.json()) as Record<string, unknown>[];
-  const exercises = mapExercises(data);
-  setCache(url, exercises);
-  return exercises;
-};
-
-const paginate = (
-  exercises: Exercise[],
-  page: number,
-  limit: number
-): { data: Exercise[]; total: number } => {
-  const offset = (page - 1) * limit;
-  return {
-    data: exercises.slice(offset, offset + limit),
-    total: exercises.length,
-  };
-};
-
-type SearchType = 'both' | 'muscle' | 'search' | 'none';
-
-const getSearchType = (search?: string, muscle?: string): SearchType => {
-  switch (true) {
-    case !!muscle && !!search:
-      return 'both';
-    case !!muscle:
-      return 'muscle';
-    case !!search:
-      return 'search';
-    default:
-      return 'none';
-  }
-};
-
-const fetchExercises = async (
-  type: SearchType,
-  search: string | undefined,
-  muscle: string | undefined,
-  fetchLimit: number
-): Promise<Exercise[]> => {
-  switch (type) {
-    case 'both': {
-      const [byMuscle, byName] = await Promise.all([
-        fetchFromExerciseDB(
-          `${EXERCISEDB_BASE_URL}/exercises/target/${encodeURIComponent(muscle!)}?limit=${fetchLimit}`
-        ),
-        fetchFromExerciseDB(
-          `${EXERCISEDB_BASE_URL}/exercises/name/${encodeURIComponent(search!)}?limit=${fetchLimit}`
-        ),
-      ]);
-      const muscleIds = new Set(byMuscle.map((e) => e.id));
-      return byName.filter((e) => muscleIds.has(e.id));
-    }
-    case 'muscle':
-      return fetchFromExerciseDB(
-        `${EXERCISEDB_BASE_URL}/exercises/target/${encodeURIComponent(muscle!)}?limit=${fetchLimit}`
-      );
-    case 'search':
-      return fetchFromExerciseDB(
-        `${EXERCISEDB_BASE_URL}/exercises/name/${encodeURIComponent(search!)}?limit=${fetchLimit}`
-      );
-    case 'none':
-      return fetchFromExerciseDB(
-        `${EXERCISEDB_BASE_URL}/exercises?limit=${fetchLimit}`
-      );
-  }
-};
+const filterExercises = (search?: string, muscle?: string): Exercise[] =>
+  dataset.filter(
+    (exercise) =>
+      (!search || matchesSearch(exercise, search)) &&
+      (!muscle || matchesMuscle(exercise, muscle))
+  );
 
 export const searchExercises = async (
   search?: string,
@@ -138,29 +77,10 @@ export const searchExercises = async (
   page = 1,
   limit = DEFAULT_LIMIT
 ): Promise<{ data: Exercise[]; total: number }> => {
-  const fetchLimit = Math.max(limit * page, 50);
-  const type = getSearchType(search, muscle);
-  const exercises = await fetchExercises(type, search, muscle, fetchLimit);
-  return paginate(exercises, page, limit);
-};
-
-export const getExerciseImage = async (exerciseId: string): Promise<Buffer> => {
-  const apiKey = process.env.EXERCISEDB_API_KEY ?? '';
-  // The API key MUST only travel in the header — putting it in the query
-  // string leaks it to access logs of any intermediate proxy / CDN / WAF.
-  const url = `${EXERCISEDB_BASE_URL}/image?exerciseId=${encodeURIComponent(exerciseId)}&resolution=180`;
-
-  const response = await fetch(url, {
-    headers: {
-      'x-rapidapi-key': apiKey,
-      'x-rapidapi-host': 'exercisedb.p.rapidapi.com',
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`ExerciseDB image error: ${response.status}`);
-  }
-
-  const arrayBuffer = await response.arrayBuffer();
-  return Buffer.from(arrayBuffer);
+  const filtered = filterExercises(search, muscle);
+  const offset = (page - 1) * limit;
+  return {
+    data: filtered.slice(offset, offset + limit),
+    total: filtered.length,
+  };
 };

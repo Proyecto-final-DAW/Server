@@ -46,7 +46,9 @@ export function normalizeUserRow<T extends Record<string, unknown> | undefined>(
     (out as Record<string, unknown>).injuries = parsePgEnumArray(out.injuries);
   }
   if ('equipment' in out) {
-    (out as Record<string, unknown>).equipment = parsePgEnumArray(out.equipment);
+    (out as Record<string, unknown>).equipment = parsePgEnumArray(
+      out.equipment
+    );
   }
   return out;
 }
