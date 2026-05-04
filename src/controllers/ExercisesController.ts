@@ -3,7 +3,7 @@ import { Request, Response } from 'express';
 import * as exerciseService from '../services/exercise.service';
 
 const ExercisesController = {
-  async search(req: Request, res: Response) {
+  search(req: Request, res: Response) {
     try {
       const search = req.query.search as string | undefined;
       const muscle = req.query.muscle as string | undefined;
@@ -13,7 +13,7 @@ const ExercisesController = {
         50
       );
 
-      const result = await exerciseService.searchExercises(
+      const result = exerciseService.searchExercises(
         search,
         muscle,
         page,

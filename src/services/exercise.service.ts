@@ -1,5 +1,8 @@
-import fs from 'node:fs';
-import path from 'node:path';
+// Bundled at build-time via `resolveJsonModule`. tsc copies the JSON next
+// to the compiled output, esbuild (used by Netlify Functions) inlines it
+// into the bundle. Either way the dataset is part of the deployed artifact
+// and there is no runtime path resolution to get wrong.
+import datasetRaw from '../data/exercises.json';
 
 const FREE_EXERCISE_DB_BASE =
   'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
@@ -27,29 +30,41 @@ interface RawEntry {
 // The client filter dropdown still uses the legacy ExerciseDB muscle
 // vocabulary (pectorals, delts, abs, quads). free-exercise-db's
 // `primaryMuscles` uses chest / shoulders / abdominals / quadriceps —
-// translate at the boundary so the client doesn't need to change.
+// translate at the boundary so the client doesn't need to change. Identity
+// entries (e.g. `traps: 'traps'`) are kept explicit so renaming a value
+// upstream doesn't silently fall through the lookup.
 const MUSCLE_ALIASES: Record<string, string> = {
   pectorals: 'chest',
+  chest: 'chest',
   delts: 'shoulders',
+  shoulders: 'shoulders',
   abs: 'abdominals',
+  abdominals: 'abdominals',
   quads: 'quadriceps',
+  quadriceps: 'quadriceps',
+  lats: 'lats',
+  biceps: 'biceps',
+  triceps: 'triceps',
+  forearms: 'forearms',
+  hamstrings: 'hamstrings',
+  glutes: 'glutes',
+  calves: 'calves',
+  traps: 'traps',
 };
 
-// Resolved against process.cwd() instead of __dirname because tsc does not
-// copy non-.ts assets into dist/. npm scripts (`dev`, `start`) both run from
-// the Server/ root, so cwd points at the project root in dev (tsx) and prod
-// (node dist/) alike.
-const datasetPath = path.join(process.cwd(), 'data', 'exercises.json');
-
-const rawDataset = JSON.parse(
-  fs.readFileSync(datasetPath, 'utf-8')
-) as RawEntry[];
+const rawDataset = datasetRaw as unknown as RawEntry[];
 
 const dataset: Exercise[] = rawDataset.map((entry) => ({
-  id: entry.id,
+  // upstream guarantees `id` in practice, but defending against a missing
+  // value avoids silent ID collisions if the dataset format ever drifts.
+  id: entry.id ?? entry.name,
   name: entry.name,
   target: entry.primaryMuscles?.[0] ?? '',
-  equipment: entry.equipment ?? 'body only',
+  // Preserve "no equipment specified" as empty so the UI can render a dash
+  // or hide the chip. ~77 of 873 entries (stretches, isometric holds) are
+  // legitimately equipment-less; defaulting to 'body only' would mislabel
+  // them as bodyweight exercises.
+  equipment: entry.equipment ?? '',
   difficulty: entry.level ?? 'beginner',
   imageUrl: entry.images?.[0]
     ? `${FREE_EXERCISE_DB_BASE}${entry.images[0]}`
@@ -71,12 +86,15 @@ const filterExercises = (search?: string, muscle?: string): Exercise[] =>
       (!muscle || matchesMuscle(exercise, muscle))
   );
 
-export const searchExercises = async (
+// Synchronous because the dataset lives in memory — no I/O. Kept as a free
+// function (not async) so the controller's call site is honest about there
+// being no pending Promise to await.
+export const searchExercises = (
   search?: string,
   muscle?: string,
   page = 1,
   limit = DEFAULT_LIMIT
-): Promise<{ data: Exercise[]; total: number }> => {
+): { data: Exercise[]; total: number } => {
   const filtered = filterExercises(search, muscle);
   const offset = (page - 1) * limit;
   return {
