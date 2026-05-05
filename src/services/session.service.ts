@@ -8,9 +8,30 @@ import type {
 } from '../models/Session';
 import { logger } from '../utils/logger';
 import * as characterService from './character.service';
+import { getExerciseTypeById } from './exercise.service';
 import * as milestoneService from './milestone.service';
 import { applyGains, calculateGains } from './progression.service';
 import * as statsService from './stats.service';
+
+/**
+ * Derives the gameplay ExerciseType from the bundled catalog, ignoring
+ * whatever the client sent. The client currently hardcodes 'strength' for
+ * every exercise (see useWorkoutState.buildPayloadExercises) — without this
+ * override only the FUERZA stat ever earned XP, regardless of whether the
+ * user did cardio, stretching, or plyometrics.
+ *
+ * Keeps a single source of truth (the dataset) so adding new exercises or
+ * relabeling categories upstream automatically routes XP to the right pillar.
+ */
+const resolveExerciseTypes = (
+  input: CreateSessionInput
+): CreateSessionInput => ({
+  ...input,
+  exercises: input.exercises.map((exercise) => ({
+    ...exercise,
+    type: getExerciseTypeById(exercise.exercise_api_id),
+  })),
+});
 
 const toISODate = (date: Date | string): string => {
   const d = date instanceof Date ? date : new Date(date);
@@ -406,9 +427,11 @@ export const processSession = async (
     throw error;
   }
 
-  const session = await createSession(userId, input);
+  const resolved = resolveExerciseTypes(input);
 
-  const gains = calculateGains(input.exercises);
+  const session = await createSession(userId, resolved);
+
+  const gains = calculateGains(resolved.exercises);
   const statUpdates = applyGains(currentStats, gains);
 
   const today = toISODate(new Date());

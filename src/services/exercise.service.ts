@@ -25,7 +25,25 @@ interface RawEntry {
   equipment?: string | null;
   level?: string;
   images?: string[];
+  category?: string;
 }
+
+// free-exercise-db uses these category values: strength, cardio, stretching,
+// plyometrics, powerlifting, olympic weightlifting, strongman. We collapse
+// them onto the four ExerciseType buckets the progression service knows
+// about. Without this mapping every exercise defaulted to 'strength' and
+// only the FUERZA stat ever earned XP — the most visible gameplay bug.
+type ExerciseType = 'strength' | 'cardio' | 'explosive' | 'stretch';
+
+const CATEGORY_TO_TYPE: Record<string, ExerciseType> = {
+  'strength': 'strength',
+  'powerlifting': 'strength',
+  'strongman': 'strength',
+  'cardio': 'cardio',
+  'plyometrics': 'explosive',
+  'olympic weightlifting': 'explosive',
+  'stretching': 'stretch',
+};
 
 // The client filter dropdown still uses the legacy ExerciseDB muscle
 // vocabulary (pectorals, delts, abs, quads). free-exercise-db's
@@ -70,6 +88,27 @@ const dataset: Exercise[] = rawDataset.map((entry) => ({
     ? `${FREE_EXERCISE_DB_BASE}${entry.images[0]}`
     : '',
 }));
+
+// Lookup table: exercise_api_id → derived ExerciseType. Built once at module
+// load so session.service can resolve types in O(1) without re-iterating
+// the dataset on every save.
+const exerciseTypeById = new Map<string, ExerciseType>(
+  rawDataset.map((entry) => {
+    const id = entry.id ?? entry.name;
+    const type =
+      (entry.category && CATEGORY_TO_TYPE[entry.category.toLowerCase()]) ||
+      'strength';
+    return [id, type];
+  })
+);
+
+/**
+ * Returns the gameplay ExerciseType for a given exercise id. Falls back to
+ * 'strength' when the id is unknown — keeps progression working even if the
+ * client sends a stale id, instead of silently dropping XP.
+ */
+export const getExerciseTypeById = (apiId: string): ExerciseType =>
+  exerciseTypeById.get(apiId) ?? 'strength';
 
 const matchesSearch = (exercise: Exercise, search: string): boolean =>
   exercise.name.toLowerCase().includes(search.toLowerCase());
