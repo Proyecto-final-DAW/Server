@@ -9,6 +9,7 @@ import {
   calculateStreakStatus,
   isoWeekMonday,
 } from '../services/streak.service';
+import { sendServerError } from '../utils/httpError';
 import { AuthRequest } from './UserController';
 
 const StreakController = {
@@ -54,12 +55,8 @@ const StreakController = {
       );
 
       return res.status(200).json(status);
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to get streak status',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'StreakController.getStatus');
     }
   },
 };

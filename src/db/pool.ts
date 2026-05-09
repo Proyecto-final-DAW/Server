@@ -31,7 +31,11 @@ function getPool(): Pool {
       }
     } catch (error) {
       if (error instanceof TypeError) {
-        throw new Error(`Invalid DATABASE_URL format: ${databaseUrl}`);
+        // Don't echo the URL into the thrown message — it carries the
+        // password and will land in any process log capture. The
+        // TypeError already names the parsing failure ("Invalid URL"
+        // etc.); that's enough to debug the env var.
+        throw new Error('Invalid DATABASE_URL format (failed to parse)');
       }
       throw error;
     }

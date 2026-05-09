@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 
 import { User } from '../models/User';
 import * as userService from '../services/user.service';
+import { sendServerError } from '../utils/httpError';
 
 interface JwtPayload {
   userId: number;
@@ -103,16 +104,8 @@ export const authentication = async (
           return res.status(401).json({ message: 'Token not yet valid' });
         case 'SyntaxError':
           return res.status(401).json({ message: 'Malformed token' });
-        default:
-          return res.status(500).json({
-            message: 'Authentication error',
-            error: err?.message || String(error),
-          });
       }
     }
-    return res.status(500).json({
-      message: 'Unknown token error',
-      error: String(error),
-    });
+    return sendServerError(res, error, 'auth.authentication');
   }
 };

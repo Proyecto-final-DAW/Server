@@ -168,7 +168,10 @@ export async function changePassword(
     throwCoded('INVALID_PASSWORD', 'INVALID_PASSWORD');
   }
 
-  if (newPassword.length < 6) {
+  // Aligned with `validators/auth.ts` register schema: a user must not
+  // be able to set a weaker password via change-password than they
+  // could during signup.
+  if (newPassword.length < 8) {
     throwCoded('PASSWORD_TOO_SHORT', 'PASSWORD_TOO_SHORT');
   }
 

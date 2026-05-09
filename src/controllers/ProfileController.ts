@@ -2,6 +2,7 @@ import { Response } from 'express';
 
 import * as profileService from '../services/profile.service';
 import { safeWriteAuditEvent } from '../utils/audit';
+import { sendServerError } from '../utils/httpError';
 import { AuthRequest } from './UserController';
 
 const ProfileController = {
@@ -19,10 +20,7 @@ const ProfileController = {
       if (error.code === 'USER_NOT_FOUND') {
         return res.status(404).json({ message: 'Resource not found' });
       }
-      return res.status(500).json({
-        message: 'Failed to get profile',
-        error: error?.message || String(err),
-      });
+      return sendServerError(res, err, 'ProfileController.getProfile');
     }
   },
 
@@ -47,10 +45,7 @@ const ProfileController = {
       if (error.code === 'NO_FIELDS_TO_UPDATE') {
         return res.status(400).json({ message: 'No valid fields to update' });
       }
-      return res.status(500).json({
-        message: 'Failed to update profile',
-        error: error?.message || String(err),
-      });
+      return sendServerError(res, err, 'ProfileController.updateProfile');
     }
   },
 
@@ -117,7 +112,7 @@ const ProfileController = {
         });
         return res
           .status(400)
-          .json({ message: 'New password must be at least 6 characters' });
+          .json({ message: 'New password must be at least 8 characters' });
       }
       await safeWriteAuditEvent(req, {
         action: 'PROFILE_CHANGE_PASSWORD_FAILED',
@@ -130,10 +125,7 @@ const ProfileController = {
           reason: error?.code ?? 'UNKNOWN',
         },
       });
-      return res.status(500).json({
-        message: 'Failed to change password',
-        error: error?.message || String(err),
-      });
+      return sendServerError(res, err, 'ProfileController.changePassword');
     }
   },
 };

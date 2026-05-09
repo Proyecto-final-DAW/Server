@@ -2,6 +2,7 @@ import { Response } from 'express';
 
 import { OnboardingFormData } from '../models/Onboarding';
 import * as onboardingService from '../services/onboarding.service';
+import { sendServerError } from '../utils/httpError';
 import { AuthRequest } from './UserController';
 
 const OnboardingController = {
@@ -30,10 +31,7 @@ const OnboardingController = {
           .status(409)
           .json({ message: 'Onboarding already completed' });
       }
-      return res.status(500).json({
-        message: 'Failed to update onboarding',
-        error: error?.message || String(err),
-      });
+      return sendServerError(res, err, 'OnboardingController.submitOnboarding');
     }
   },
 };

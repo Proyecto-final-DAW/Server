@@ -69,15 +69,16 @@ export const updateProfileSchema = z
   .strict();
 
 /**
- * Body for `PUT /profile/me/password`. Mirrors the legacy server-side message
- * which expects newPassword to be at least 6 characters.
+ * Body for `PUT /profile/me/password`. Min length matches the register
+ * schema in `validators/auth.ts` so a user cannot set a weaker password
+ * via change-password than they could during signup.
  */
 export const changePasswordSchema = z
   .object({
     currentPassword: z.string().min(1, 'currentPassword is required'),
     newPassword: z
       .string()
-      .min(6, 'newPassword must be at least 6 characters')
+      .min(8, 'newPassword must be at least 8 characters')
       .max(128, 'newPassword must be at most 128 characters'),
   })
   .strict();

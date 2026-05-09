@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 
 import * as exerciseService from '../services/exercise.service';
+import { sendServerError } from '../utils/httpError';
 
 const ExercisesController = {
   search(req: Request, res: Response) {
@@ -21,12 +22,8 @@ const ExercisesController = {
       );
 
       return res.status(200).json(result);
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to fetch exercises',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'ExercisesController.search');
     }
   },
 };

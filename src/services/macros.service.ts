@@ -40,9 +40,14 @@ function basalMetabolicRate(
 ): number {
   const weightHeightAgeComponentKcal =
     10 * weightKg + 6.25 * heightCm - 5 * age;
-  return sex === Sex.MALE
-    ? weightHeightAgeComponentKcal + 5
-    : weightHeightAgeComponentKcal - 161;
+  // Mifflin-St Jeor: +5 male, -161 female. For NON_BINARY there is no
+  // accepted "official" constant, so we use the midpoint (-78) — the
+  // approach most public macro calculators take. This keeps the BMR
+  // physiologically reasonable without forcing the user to pick a
+  // binary they don't identify with.
+  if (sex === Sex.MALE) return weightHeightAgeComponentKcal + 5;
+  if (sex === Sex.FEMALE) return weightHeightAgeComponentKcal - 161;
+  return weightHeightAgeComponentKcal - 78;
 }
 
 function goalAdjustedCalories(

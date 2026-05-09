@@ -7,6 +7,7 @@ import * as cardsService from '../services/cards.service';
 import * as statsService from '../services/stats.service';
 import * as userService from '../services/user.service';
 import { safeWriteAuditEvent } from '../utils/audit';
+import { sendServerError } from '../utils/httpError';
 import { sleepJitterMs } from '../utils/sleep';
 import type { LoginBody, RegisterBody } from '../validators/auth';
 
@@ -81,10 +82,7 @@ const UserController = {
           reason: error?.code ?? 'UNKNOWN',
         },
       });
-      return res.status(500).json({
-        message: 'Registration failed',
-        error: error?.message || String(err),
-      });
+      return sendServerError(res, err, 'UserController.register');
     }
   },
 
@@ -142,10 +140,7 @@ const UserController = {
           reason: error?.code ?? 'UNKNOWN',
         },
       });
-      return res.status(500).json({
-        message: 'Login failed',
-        error: error?.message || String(err),
-      });
+      return sendServerError(res, err, 'UserController.login');
     }
   },
 
@@ -205,10 +200,7 @@ const UserController = {
           reason: error?.code ?? 'UNKNOWN',
         },
       });
-      return res.status(500).json({
-        message: 'Logout failed',
-        error: error?.message || String(err),
-      });
+      return sendServerError(res, err, 'UserController.logout');
     }
   },
 
@@ -221,12 +213,8 @@ const UserController = {
 
       const cards = await cardsService.getCards(userId);
       return res.status(200).json(cards);
-    } catch (err: unknown) {
-      const error = err as Error;
-      return res.status(500).json({
-        message: 'Failed to get cards',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'UserController.getCards');
     }
   },
 
@@ -245,12 +233,8 @@ const UserController = {
       }
 
       return res.status(200).json(stats);
-    } catch (err: unknown) {
-      const error = err as Error;
-      return res.status(500).json({
-        message: 'Failed to get stats',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'UserController.getStatsForCurrentUser');
     }
   },
 };

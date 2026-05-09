@@ -9,15 +9,30 @@ const exerciseTypeSchema = z.enum([
 
 const cardioIntensitySchema = z.enum(['LOW', 'MEDIUM', 'HIGH']);
 
+// Realistic upper bounds on a logged set. The DB stores `weight` as
+// `numeric(6, 2)` which already rejects values >= 10000, but we want
+// to fail fast with a clean Zod message instead of leaking a Postgres
+// "value out of range" 500. 1000 reps and 1000 kg are both well above
+// what any human can record yet small enough to flag a typo or a
+// tampering attempt — and crucially, they prevent a single absurd set
+// from inflating `total_weight` (used for milestone unlocks) by 10^9.
+const MAX_REPS_PER_SET = 1000;
+const MAX_WEIGHT_KG_PER_SET = 1000;
+
 const setSchema = z
   .object({
     reps: z
       .number()
       .int('reps must be an integer')
-      .nonnegative('reps must be 0 or more'),
+      .nonnegative('reps must be 0 or more')
+      .max(MAX_REPS_PER_SET, `reps must be at most ${MAX_REPS_PER_SET}`),
     weight: z
       .number()
       .nonnegative('weight must be 0 or more')
+      .max(
+        MAX_WEIGHT_KG_PER_SET,
+        `weight must be at most ${MAX_WEIGHT_KG_PER_SET} kg`
+      )
       .finite('weight must be finite'),
     /**
      * Hold time for stretch / mobility sets. Optional — stays absent

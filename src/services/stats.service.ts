@@ -15,9 +15,23 @@ export const createStats = async (userId: number) => {
 };
 
 export const findByUserId = async (userId: number) => {
-  const result = await pool.query('SELECT * FROM stats WHERE user_id = $1', [
-    userId,
-  ]);
+  // Cast date columns to text so the wire shape is the calendar string
+  // ('2026-05-09') instead of the ISO timestamp `pg` would otherwise
+  // produce ('2026-05-09T00:00:00.000Z'). `diet.service.getDietState`
+  // already does this for `last_diet_date`; mirroring it here keeps
+  // the same column consistent across endpoints — without the cast
+  // the streak === localTodayISO() comparison on the client never
+  // matches when the value is sourced from /users/stats vs /diet/state.
+  const result = await pool.query(
+    `SELECT
+        *,
+        last_session_date::text AS last_session_date,
+        last_qualifying_week_monday::text AS last_qualifying_week_monday,
+        last_diet_date::text AS last_diet_date
+       FROM stats
+      WHERE user_id = $1`,
+    [userId]
+  );
   return result.rows[0];
 };
 

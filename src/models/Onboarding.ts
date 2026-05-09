@@ -21,7 +21,7 @@ export interface OnboardingFormData {
   birthDate: string;
   weight: string;
   height: string;
-  sex?: 'MALE' | 'FEMALE';
+  sex?: 'MALE' | 'FEMALE' | 'NON_BINARY';
   activityLevel?: ActivityLevel;
   goals?: Goal[];
   experienceLevel?: ExperienceLevel;

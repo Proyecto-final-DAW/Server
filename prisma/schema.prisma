@@ -150,7 +150,10 @@ model Session {
   routine   Routine?          @relation(fields: [routine_id], references: [id], onDelete: SetNull)
   exercises SessionExercise[]
 
-  @@index([user_id, date])
+  // One session per day per user — enforced at the DB level so the
+  // race between the application's pre-check SELECT and the INSERT can
+  // never double-insert. See migration 20260515120000_sessions_unique_user_date.
+  @@unique([user_id, date], map: "sessions_user_id_date_key")
   @@map("sessions")
 }
 

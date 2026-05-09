@@ -1,9 +1,18 @@
 import pool from '../db/pool';
 import type { ConditionType, UnlockedMilestone } from '../models/Milestone';
 
+// Explicit column list rather than `SELECT *`. Two reasons:
+//  1) The wire shape becomes part of the API contract — adding a
+//     column to `milestones` no longer accidentally leaks it to the
+//     client (and through any analytics that captures responses).
+//  2) The client `MilestoneDTO` only models these six fields, so the
+//     extra bytes from `SELECT *` are pure waste on every render.
+const MILESTONE_COLUMNS =
+  'id, name, description, condition_type, condition_value, icon';
+
 export const findAllMilestones = async () => {
   const result = await pool.query(
-    'SELECT * FROM milestones ORDER BY condition_type, condition_value'
+    `SELECT ${MILESTONE_COLUMNS} FROM milestones ORDER BY condition_type, condition_value`
   );
   return result.rows;
 };
@@ -12,7 +21,14 @@ export const findUnlockedByUser = async (
   userId: number
 ): Promise<UnlockedMilestone[]> => {
   const result = await pool.query(
-    `SELECT m.*, um.unlocked_at
+    `SELECT
+        m.id,
+        m.name,
+        m.description,
+        m.condition_type,
+        m.condition_value,
+        m.icon,
+        um.unlocked_at
      FROM user_milestones um
      JOIN milestones m ON m.id = um.milestone_id
      WHERE um.user_id = $1
@@ -40,7 +56,14 @@ export const checkAndUnlock = async (
        ON CONFLICT (user_id, milestone_id) DO NOTHING
        RETURNING milestone_id, unlocked_at
      )
-     SELECT m.*, i.unlocked_at
+     SELECT
+        m.id,
+        m.name,
+        m.description,
+        m.condition_type,
+        m.condition_value,
+        m.icon,
+        i.unlocked_at
      FROM inserted i
      JOIN milestones m ON m.id = i.milestone_id`,
     [userId, conditionType, currentValue]

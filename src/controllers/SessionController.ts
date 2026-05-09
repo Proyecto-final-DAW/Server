@@ -8,7 +8,7 @@ import {
   ExerciseType,
 } from '../models/Session';
 import * as sessionService from '../services/session.service';
-import { logger } from '../utils/logger';
+import { sendServerError } from '../utils/httpError';
 import { AuthRequest } from './UserController';
 
 const VALID_TYPES: ExerciseType[] = [
@@ -151,42 +151,27 @@ const SessionController = {
 
       const result = await sessionService.processSession(userId, input);
       return res.status(201).json(result);
-    } catch (error: unknown) {
-      const typedError = error as Error & { code?: string };
+    } catch (err: unknown) {
+      const typedError = err as Error & { code?: string };
       if (typedError.code === 'STATS_NOT_FOUND') {
         return res
           .status(404)
           .json({ message: 'Stats not found. Complete onboarding first.' });
       }
-      return res.status(500).json({
-        message: 'Failed to create session',
-        error: typedError?.message || String(error),
-      });
-    }
-  },
-
-  async getAll(req: AuthRequest, res: Response) {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ message: 'Not authorized' });
+      // Race-condition fallback for the "one session per day" rule:
+      // the pre-INSERT SELECT above narrows the window but two concurrent
+      // saves can still both pass the check. The DB-side UNIQUE
+      // (user_id, date) catches the duplicate (Postgres SQLSTATE 23505)
+      // and we surface the same SESSION_ALREADY_LOGGED_TODAY code so the
+      // client UI shows the friendly "ya entrenaste hoy" instead of a 500.
+      if (typedError.code === '23505') {
+        return res.status(409).json({
+          code: 'SESSION_ALREADY_LOGGED_TODAY',
+          message:
+            'Ya has registrado una sesion para esta fecha. Solo cuenta una sesion por dia.',
+        });
       }
-
-      const pageRaw = req.query.page;
-      const limitRaw = req.query.limit;
-      const page =
-        typeof pageRaw === 'string' ? parseInt(pageRaw, 10) : undefined;
-      const limit =
-        typeof limitRaw === 'string' ? parseInt(limitRaw, 10) : undefined;
-
-      const result = await sessionService.getUserSessions(userId, {
-        page: page !== undefined && !Number.isNaN(page) ? page : undefined,
-        limit: limit !== undefined && !Number.isNaN(limit) ? limit : undefined,
-      });
-      return res.status(200).json(result);
-    } catch (err) {
-      logger.error({ err, userId: req.user?.id }, 'Failed to fetch sessions');
-      return res.status(500).json({ message: 'Failed to fetch sessions' });
+      return sendServerError(res, err, 'SessionController.create');
     }
   },
 
@@ -210,13 +195,7 @@ const SessionController = {
       });
       return res.status(200).json(result);
     } catch (err) {
-      logger.error(
-        { err, userId: req.user?.id },
-        'Failed to fetch session history'
-      );
-      return res
-        .status(500)
-        .json({ message: 'Failed to fetch session history' });
+      return sendServerError(res, err, 'SessionController.getHistory');
     }
   },
 
@@ -239,13 +218,7 @@ const SessionController = {
 
       return res.status(200).json(session);
     } catch (err) {
-      logger.error(
-        { err, userId: req.user?.id, sessionId: req.params.sessionId },
-        'Failed to fetch session detail'
-      );
-      return res
-        .status(500)
-        .json({ message: 'Failed to fetch session detail' });
+      return sendServerError(res, err, 'SessionController.getDetail');
     }
   },
 
@@ -258,12 +231,8 @@ const SessionController = {
 
       const summary = await sessionService.getWeeklySummary(userId);
       return res.status(200).json(summary);
-    } catch (error: unknown) {
-      const typedError = error as Error;
-      return res.status(500).json({
-        message: 'Failed to get weekly summary',
-        error: typedError?.message || String(error),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'SessionController.weeklySummary');
     }
   },
 };

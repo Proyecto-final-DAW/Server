@@ -1,6 +1,7 @@
 import { Response } from 'express';
 
 import * as statsService from '../services/stats.service';
+import { sendServerError } from '../utils/httpError';
 import { AuthRequest } from './UserController';
 
 const StatsController = {
@@ -19,12 +20,8 @@ const StatsController = {
       }
 
       return res.status(200).json(stats);
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to get stats',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'StatsController.getStats');
     }
   },
 
@@ -70,12 +67,8 @@ const StatsController = {
       }
 
       return res.status(200).json(updated);
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to update stats',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'StatsController.updateStats');
     }
   },
 
@@ -93,12 +86,8 @@ const StatsController = {
 
       const stats = await statsService.createStats(userId);
       return res.status(201).json(stats);
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to initialize stats',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'StatsController.initStats');
     }
   },
 
@@ -123,12 +112,8 @@ const StatsController = {
           : 200;
       const history = await statsService.getStatHistory(userId, safeLimit);
       return res.status(200).json(history);
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to get stat history',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'StatsController.getHistory');
     }
   },
 };

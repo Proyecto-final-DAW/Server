@@ -1,4 +1,5 @@
 import type { Goal, Sex } from '@prisma/client';
+import jwt from 'jsonwebtoken';
 
 import pool from '../db/pool';
 import { calculateCalories } from './macros.service';
@@ -149,10 +150,38 @@ export const updateUserMacroTargets = async (
   return normalizeUserRow(result.rows[0]);
 };
 
+/**
+ * Maximum tokens kept per user. Each successful login appends a JWT;
+ * without a cap the column grows unbounded (one row per logged-in
+ * device that never explicitly logged out / refreshed). 10 covers
+ * "phone + tablet + desktop + a few stale browsers" comfortably.
+ */
+const MAX_TOKENS_PER_USER = 10;
+
 export const addToken = async (userId: number, token: string) => {
+  // Read current tokens, drop any that no longer verify (expired or
+  // signed under a rotated secret) — this prunes the array as a side
+  // effect of every login. Then append the new token and trim to the
+  // most recent MAX so the column can't balloon under heavy use.
+  const jwtSecret = process.env.JWT_SECRET as string;
+  const current = await pool.query<{ tokens: string[] | null }>(
+    'SELECT tokens FROM users WHERE id = $1',
+    [userId]
+  );
+  const previous = current.rows[0]?.tokens ?? [];
+  const valid = previous.filter((t) => {
+    try {
+      jwt.verify(t, jwtSecret);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  const next = [...valid, token].slice(-MAX_TOKENS_PER_USER);
+
   const result = await pool.query(
-    'UPDATE users SET tokens = array_append(tokens, $1) WHERE id = $2 RETURNING tokens',
-    [token, userId]
+    'UPDATE users SET tokens = $1::text[] WHERE id = $2 RETURNING tokens',
+    [next, userId]
   );
   return result.rows[0]?.tokens || [];
 };

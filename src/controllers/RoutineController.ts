@@ -2,6 +2,7 @@ import { Response } from 'express';
 
 import { RoutineExercise } from '../models/Routine';
 import * as routineService from '../services/routine.service';
+import { sendServerError } from '../utils/httpError';
 import { AuthRequest } from './UserController';
 
 type RoutineExerciseInput = Omit<RoutineExercise, 'id' | 'routine_id'>;
@@ -54,12 +55,8 @@ const RoutineController = {
       // wrapping it in an envelope object on zero routines breaks any
       // client that does `response.map(...)` on the result.
       return res.status(200).json(routines);
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to get routines',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'RoutineController.getAll');
     }
   },
 
@@ -83,12 +80,8 @@ const RoutineController = {
       }
 
       return res.status(200).json(routine);
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to get routine',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'RoutineController.getById');
     }
   },
 
@@ -127,12 +120,8 @@ const RoutineController = {
       });
 
       return res.status(201).json(routine);
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to create routine',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'RoutineController.create');
     }
   },
 
@@ -190,12 +179,8 @@ const RoutineController = {
       }
 
       return res.status(200).json(updated);
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to update routine',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'RoutineController.update');
     }
   },
 
@@ -219,12 +204,8 @@ const RoutineController = {
       }
 
       return res.status(200).json({ message: 'Routine deleted' });
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to delete routine',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'RoutineController.remove');
     }
   },
 };

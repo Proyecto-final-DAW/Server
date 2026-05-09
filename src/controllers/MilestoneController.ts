@@ -1,6 +1,7 @@
 import { Response } from 'express';
 
 import * as milestoneService from '../services/milestone.service';
+import { sendServerError } from '../utils/httpError';
 import { AuthRequest } from './UserController';
 
 const MilestoneController = {
@@ -8,12 +9,8 @@ const MilestoneController = {
     try {
       const milestones = await milestoneService.findAllMilestones();
       return res.status(200).json(milestones);
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to get milestones',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'MilestoneController.getAll');
     }
   },
 
@@ -26,12 +23,8 @@ const MilestoneController = {
 
       const unlocked = await milestoneService.findUnlockedByUser(userId);
       return res.status(200).json(unlocked);
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to get unlocked milestones',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'MilestoneController.getUnlocked');
     }
   },
 };

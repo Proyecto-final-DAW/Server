@@ -1,6 +1,7 @@
 import { Response } from 'express';
 
 import * as dietService from '../services/diet.service';
+import { sendServerError } from '../utils/httpError';
 import { AuthRequest } from './UserController';
 
 const DietController = {
@@ -25,10 +26,7 @@ const DietController = {
       if (err instanceof RangeError) {
         return res.status(400).json({ message: err.message });
       }
-      return res.status(500).json({
-        message: 'Failed to get diet',
-        error: error?.message || String(err),
-      });
+      return sendServerError(res, err, 'DietController.getDiet');
     }
   },
 
@@ -55,12 +53,8 @@ const DietController = {
         last_diet_date: state.last_diet_date,
         logged_today: loggedToday,
       });
-    } catch (err: unknown) {
-      const error = err as Error;
-      return res.status(500).json({
-        message: 'Failed to get diet state',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'DietController.getState');
     }
   },
 
@@ -92,12 +86,8 @@ const DietController = {
         vigor_after_level: result.vigor_after_level,
         vigor_delta: result.vigor_delta,
       });
-    } catch (err: unknown) {
-      const error = err as Error;
-      return res.status(500).json({
-        message: 'Failed to log diet',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'DietController.logToday');
     }
   },
 };

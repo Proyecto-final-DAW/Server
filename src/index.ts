@@ -22,6 +22,29 @@ const SHUTDOWN_TIMEOUT_MS = Number.parseInt(
 );
 
 async function startServer() {
+  // Hard-fail at startup if the local-dev auth bypass is set in any
+  // non-development environment. The middleware itself is double-gated
+  // on NODE_ENV='development' AND the env flag, but Netlify branch
+  // deploys + some Docker base images set NODE_ENV unpredictably, so a
+  // single misconfiguration could let every request log in as user 1
+  // silently. Refuse to boot rather than ship that.
+  if (
+    process.env.LOCAL_DEV_AUTH_BYPASS === '1' &&
+    process.env.NODE_ENV !== 'development'
+  ) {
+    console.error(
+      '❌ LOCAL_DEV_AUTH_BYPASS=1 requires NODE_ENV=development. ' +
+        `Got NODE_ENV='${process.env.NODE_ENV ?? ''}'. Refusing to start.`
+    );
+    process.exit(1);
+  }
+  if (process.env.LOCAL_DEV_AUTH_BYPASS === '1') {
+    console.warn(
+      '⚠ LOCAL_DEV_AUTH_BYPASS is ENABLED. Every unauthenticated ' +
+        `request will be logged in as user ${process.env.LOCAL_DEV_USER_ID ?? '1'}.`
+    );
+  }
+
   const app = createApp();
 
   try {

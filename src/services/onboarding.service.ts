@@ -97,41 +97,58 @@ function applyFormToUserUpdates(
   );
 }
 
-/** Persists onboarding on `public.users` (name, profile fields, onboarding_completed). */
+/** Persists onboarding on `public.users` (name, profile fields, onboarding_completed).
+ *
+ * Wrapped in a single transaction so the profile UPDATE and the
+ * derived-macros UPDATE either both commit or both roll back. The
+ * earlier two-call version could leave a user with
+ * `onboarding_completed = true` but no daily_calories/protein_grams
+ * if `calculateCalories` threw — and `/diet` then 400s forever
+ * because the onboarding gate already passed.
+ */
 export const submitOnboarding = async (
   userId: number,
   formData: OnboardingFormData
 ): Promise<UserPublic> => {
-  const status = await pool.query(
-    `SELECT (onboarding_completed IS TRUE) AS completed FROM users WHERE id = $1`,
-    [userId]
-  );
-  const statusRow = status.rows[0];
-  if (!statusRow) {
-    const err = new Error('USER_NOT_FOUND');
-    (err as Error & { code: string }).code = 'USER_NOT_FOUND';
-    throw err;
-  }
-  if (statusRow.completed) {
-    const err = new Error('ONBOARDING_ALREADY_COMPLETED');
-    (err as Error & { code: string }).code = 'ONBOARDING_ALREADY_COMPLETED';
-    throw err;
-  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
 
-  const setParts: string[] = ['onboarding_completed = $1'];
-  const values: unknown[] = [true];
+    const status = await client.query(
+      `SELECT (onboarding_completed IS TRUE) AS completed FROM users WHERE id = $1`,
+      [userId]
+    );
+    const statusRow = status.rows[0];
+    if (!statusRow) {
+      const err = new Error('USER_NOT_FOUND');
+      (err as Error & { code: string }).code = 'USER_NOT_FOUND';
+      throw err;
+    }
+    if (statusRow.completed) {
+      const err = new Error('ONBOARDING_ALREADY_COMPLETED');
+      (err as Error & { code: string }).code = 'ONBOARDING_ALREADY_COMPLETED';
+      throw err;
+    }
 
-  applyFormToUserUpdates(formData, setParts, values);
+    const setParts: string[] = ['onboarding_completed = $1'];
+    const values: unknown[] = [true];
 
-  const setClause = setParts.join(', ');
-  const idPlaceholder = values.length + 1;
+    applyFormToUserUpdates(formData, setParts, values);
 
-  const result = await pool.query(
-    `UPDATE users SET ${setClause}, updated_at = NOW() WHERE id = $${idPlaceholder} AND NOT (onboarding_completed IS TRUE) RETURNING *`,
-    [...values, userId]
-  );
+    const setClause = setParts.join(', ');
+    const idPlaceholder = values.length + 1;
 
-  if (result.rows[0]) {
+    const result = await client.query(
+      `UPDATE users SET ${setClause}, updated_at = NOW() WHERE id = $${idPlaceholder} AND NOT (onboarding_completed IS TRUE) RETURNING *`,
+      [...values, userId]
+    );
+
+    if (!result.rows[0]) {
+      const err = new Error('ONBOARDING_UPDATE_FAILED');
+      (err as Error & { code: string }).code = 'ONBOARDING_UPDATE_FAILED';
+      throw err;
+    }
+
     const row = normalizeUserRow(result.rows[0] as Record<string, unknown>);
 
     const inputs = resolveMacroInputs(row);
@@ -144,7 +161,7 @@ export const submitOnboarding = async (
         inputs.activityFactor,
         inputs.goal
       );
-      await pool.query(
+      await client.query(
         `UPDATE users
             SET daily_calories = $1, protein_grams = $2, fat_grams = $3, carb_grams = $4,
                 updated_at = NOW()
@@ -157,13 +174,22 @@ export const submitOnboarding = async (
           userId,
         ]
       );
+      // Reflect the macro fields in the returned user so the client
+      // sees them on the same response without a follow-up GET.
+      row.daily_calories = targets.daily_calories;
+      row.protein_grams = targets.protein_grams;
+      row.fat_grams = targets.fat_grams;
+      row.carb_grams = targets.carb_grams;
     }
+
+    await client.query('COMMIT');
 
     const { hashed_password: _hp, tokens: _tokens, ...user } = row;
     return user as UserPublic;
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
   }
-
-  const err = new Error('ONBOARDING_UPDATE_FAILED');
-  (err as Error & { code: string }).code = 'ONBOARDING_UPDATE_FAILED';
-  throw err;
 };

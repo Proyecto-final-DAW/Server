@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
-const sexSchema = z.enum(['MALE', 'FEMALE']);
+// Mirrors the Prisma `Sex` enum (MALE | FEMALE | NON_BINARY) and the
+// onboarding/profile schemas. The macros service averages the male
+// and female BMR offsets when sex is NON_BINARY.
+const sexSchema = z.enum(['MALE', 'FEMALE', 'NON_BINARY']);
 const goalSchema = z.enum(['LOSE_FAT', 'GAIN_MUSCLE', 'MAINTAIN', 'HEALTH']);
 
 /**

@@ -3,7 +3,13 @@ import { z } from 'zod';
 const trimmed = <TSchema extends z.ZodTypeAny>(schema: TSchema) =>
   z.preprocess((v) => (typeof v === 'string' ? v.trim() : v), schema);
 
-const sexSchema = z.enum(['MALE', 'FEMALE']);
+// Accepts the same enum values as the Prisma `Sex` type. NON_BINARY
+// was previously rejected here even though `validators/profile.ts`
+// and `prisma/schema.prisma` accept it, which forced a non-binary
+// user to onboard as MALE/FEMALE first and then change it from the
+// profile screen — a UX hole. The macro calculator below handles
+// NON_BINARY by averaging the male/female BMR offsets.
+const sexSchema = z.enum(['MALE', 'FEMALE', 'NON_BINARY']);
 
 const goalSchema = z.enum(['LOSE_FAT', 'GAIN_MUSCLE', 'MAINTAIN', 'HEALTH']);
 

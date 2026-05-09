@@ -181,10 +181,15 @@ export const update = async (
     const fields = Object.keys(data);
     const values = Object.values(data);
 
-    if (fields.length > 0) {
-      const setClause = fields
-        .map((field, i) => `${field} = $${i + 1}`)
-        .join(', ');
+    // Always bump updated_at, even when the diff is "exercises only" —
+    // the listing query orders by updated_at DESC and an exercise-only
+    // edit (the most common case) used to never resurface to the top.
+    // Coalesce both branches into a single UPDATE so the routine row
+    // touches updated_at even if the metadata fields didn't change.
+    if (fields.length > 0 || input.exercises !== undefined) {
+      const setParts = fields.map((field, i) => `${field} = $${i + 1}`);
+      setParts.push('updated_at = NOW()');
+      const setClause = setParts.join(', ');
 
       await client.query(
         `UPDATE routines
