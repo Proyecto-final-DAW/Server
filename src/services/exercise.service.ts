@@ -16,6 +16,14 @@ export interface Exercise {
   equipment: string;
   difficulty: string;
   imageUrl: string;
+  /**
+   * Raw free-exercise-db category (`strength` | `stretching` | `cardio`
+   * | `plyometrics` | `powerlifting` | `olympic weightlifting` |
+   * `strongman`). The client uses this to decide which inputs the
+   * SetLogger renders — stretches show a duration field instead of
+   * weight/reps, etc.
+   */
+  category: string;
 }
 
 interface RawEntry {
@@ -87,7 +95,29 @@ const dataset: Exercise[] = rawDataset.map((entry) => ({
   imageUrl: entry.images?.[0]
     ? `${FREE_EXERCISE_DB_BASE}${entry.images[0]}`
     : '',
+  category: entry.category?.toLowerCase() ?? 'strength',
 }));
+
+// Same lookup table as `exerciseTypeById` but keyed on category +
+// equipment so the routine response can hydrate the SetLogger inputs
+// without having the client re-fetch the catalog. Used by routine.service
+// when serializing routine_exercises rows.
+const exerciseMetaById = new Map<
+  string,
+  { category: string; equipment: string }
+>(
+  dataset.map((e) => [e.id, { category: e.category, equipment: e.equipment }])
+);
+
+export const getExerciseMetaById = (
+  apiId: string
+): { category: string; equipment: string } =>
+  // Empty defaults (rather than 'strength') so the client can spot the
+  // miss and run its name-based inference. Routines built from
+  // templates use synthetic `tpl-*` ids that never match the catalog,
+  // so they'd otherwise all read as strength and force the SetLogger
+  // into weight+reps mode.
+  exerciseMetaById.get(apiId) ?? { category: '', equipment: '' };
 
 // Lookup table: exercise_api_id → derived ExerciseType. Built once at module
 // load so session.service can resolve types in O(1) without re-iterating

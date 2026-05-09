@@ -1,5 +1,6 @@
 import pool from '../db/pool';
 import { resolveMacroInputs } from '../utils/macroProfile';
+import { getExerciseMetaById } from './exercise.service';
 import { calculateCalories } from './macros.service';
 
 export interface WeightEntry {
@@ -156,14 +157,66 @@ export const getExerciseMaxHistory = async (
   return result.rows;
 };
 
+// Name-based fallback: legacy `tpl-cat-cow-stretch`-style ids never
+// match the catalog and predate the muscleGroup-encoded prefix, so
+// they slip past both the prefix and the category checks. The name
+// itself still names the move ("Cat-cow stretch", "Moderate-pace
+// walk"), so a small keyword list cleans them up reliably.
+const STRETCH_NAME_PATTERN =
+  /\b(stretch|rotation|mobility|movilidad|yoga|cat[- ]?cow)\b/i;
+const CARDIO_NAME_PATTERN =
+  /\b(walk|jog|running|run|cycling|cardio|swim)\b/i;
+
+/**
+ * Bodyweight / stretch / cardio entries shouldn't pollute the
+ * "Progresion por ejercicio" selector — the chart plots max weight per
+ * date and those entries either sit at zero (stretches) or at the
+ * user's body mass (bodyweight, server-stamped). Detected by catalog
+ * metadata, with extra guards for synthetic template ids that never
+ * match the catalog (`tpl-stretch-*` / `tpl-cardio-*`), the cardio
+ * synthetic prefix used for the post-workout cardio entry, and a
+ * name-based heuristic for legacy synthetic ids that pre-dated the
+ * sub-prefix encoding.
+ */
+const isWeightedExercise = (apiId: string, name: string): boolean => {
+  if (apiId.startsWith('cardio:')) return false;
+  if (apiId.startsWith('tpl-stretch-')) return false;
+  if (apiId.startsWith('tpl-cardio-')) return false;
+
+  // Heuristic on the display name. Catches legacy `tpl-<slug>` ids
+  // (no sub-prefix) and any custom-named exercise the user added
+  // manually whose name signals stretch/cardio.
+  if (STRETCH_NAME_PATTERN.test(name) || CARDIO_NAME_PATTERN.test(name)) {
+    return false;
+  }
+
+  const meta = getExerciseMetaById(apiId);
+  if (meta.category === 'stretching' || meta.category === 'cardio') {
+    return false;
+  }
+  const equipment = meta.equipment.toLowerCase().replace(/\s+/g, '');
+  if (equipment === 'bodyonly' || equipment === 'bodyweight') return false;
+  return true;
+};
+
 /**
  * Returns the distinct exercises the user has logged at least once,
- * ordered by most recently performed first.
+ * filtered to those where tracking max weight makes sense — strength
+ * moves with an external load. Two-stage filter:
+ *
+ *  1. SQL — only exercises whose user has logged at least one set with
+ *     `reps > 0`. Stretches save sets with `reps=0` plus a duration,
+ *     so they're excluded here; cardio entries (no sets at all) are
+ *     also excluded by the EXISTS clause. This catches the legacy
+ *     `tpl-cat-cow-stretch` style ids that the catalog can't classify.
+ *  2. TS — `isWeightedExercise` removes bodyweight entries (real reps,
+ *     but the "weight" is the user's body mass stamped server-side) so
+ *     they don't drown out the actual PR-tracking exercises.
  */
 export const getPerformedExercises = async (
   userId: number
 ): Promise<PerformedExerciseEntry[]> => {
-  const result = await pool.query(
+  const result = await pool.query<PerformedExerciseEntry>(
     `SELECT id, name
        FROM (
          SELECT DISTINCT ON (se.exercise_api_id)
@@ -173,10 +226,16 @@ export const getPerformedExercises = async (
            FROM session_exercises se
            JOIN sessions s ON s.id = se.session_id
           WHERE s.user_id = $1
+            AND EXISTS (
+              SELECT 1
+                FROM exercise_sets es
+               WHERE es.session_exercise_id = se.id
+                 AND es.reps > 0
+            )
           ORDER BY se.exercise_api_id, s.date DESC, s.id DESC
        ) latest
       ORDER BY last_date DESC, id ASC`,
     [userId]
   );
-  return result.rows;
+  return result.rows.filter((row) => isWeightedExercise(row.id, row.name));
 };

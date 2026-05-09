@@ -85,6 +85,11 @@ function applyFormToUserUpdates(
           push('injuries', arr, '"Injury"[]');
           break;
         }
+        case 'injuryNotes': {
+          const trimmed = String(raw).trim();
+          if (trimmed) push('injury_notes', trimmed);
+          break;
+        }
         default:
           break;
       }

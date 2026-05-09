@@ -1,5 +1,17 @@
 import pool from '../db/pool';
 import type { RoutineExercise } from '../models/Routine';
+import { getExerciseMetaById } from './exercise.service';
+
+/**
+ * Pulls `category` and `equipment` out of the bundled catalog and
+ * stamps them onto the routine_exercises row. The columns aren't
+ * persisted (the catalog is the source of truth and would drift
+ * silently if duplicated), so the join happens here at read time.
+ */
+const hydrateRoutineExercise = (row: RoutineExercise): RoutineExercise => {
+  const meta = getExerciseMetaById(row.exercise_api_id);
+  return { ...row, category: meta.category, equipment: meta.equipment };
+};
 
 export interface CreateRoutineInput {
   name: string;
@@ -27,7 +39,7 @@ const getAllExercisesByRoutineIds = async (routineIds: number[]) => {
   const map = new Map<number, RoutineExercise[]>();
   for (const row of result.rows as RoutineExercise[]) {
     const arr = map.get(row.routine_id) ?? [];
-    arr.push(row);
+    arr.push(hydrateRoutineExercise(row));
     map.set(row.routine_id, arr);
   }
   return map;
@@ -80,7 +92,9 @@ export const getById = async (userId: number, routineId: number) => {
 
   return {
     ...routine,
-    exercises: exercisesResult.rows,
+    exercises: (exercisesResult.rows as RoutineExercise[]).map(
+      hydrateRoutineExercise
+    ),
   };
 };
 

@@ -4,9 +4,7 @@ import { UserPublic } from '../models/User';
 import { hashIdentifier } from '../services/audit.service';
 import * as authService from '../services/auth.service';
 import * as cardsService from '../services/cards.service';
-import * as milestonesService from '../services/milestone.service';
 import * as statsService from '../services/stats.service';
-import { getTip } from '../services/tips.service';
 import * as userService from '../services/user.service';
 import { safeWriteAuditEvent } from '../utils/audit';
 import { sleepJitterMs } from '../utils/sleep';
@@ -41,8 +39,16 @@ const UserController = {
     } catch (err: unknown) {
       const error = err as Error & { code?: string };
 
-      // Enumeration protection: do not confirm whether the email exists.
-      // Postgres unique violation = 23505 (e.g. duplicate email).
+      // Postgres unique violation = 23505 (duplicate email). Previously
+      // we returned an opaque 202 to hide whether an email is in use,
+      // but pairing that with the client's auto-login-after-register
+      // meant a returning user typing creds into the *register* form
+      // would silently sign in to their existing account — confusing
+      // at best, and at worst a UX channel for accidental account
+      // takeover if someone reused a known email + guessed password.
+      // For a fitness app, surfacing "ese email ya existe" is the
+      // right tradeoff: account enumeration here doesn't unlock
+      // anything an attacker couldn't try via the login endpoint.
       if (error.code === '23505') {
         await sleepJitterMs(150, 300);
         await safeWriteAuditEvent(req, {
@@ -59,7 +65,10 @@ const UserController = {
             ),
           },
         });
-        return res.status(202).json({ message: 'Registration processed' });
+        return res.status(409).json({
+          message: 'Ese email ya esta registrado. Inicia sesion en su lugar.',
+          code: 'EMAIL_ALREADY_REGISTERED',
+        });
       }
       await safeWriteAuditEvent(req, {
         action: 'AUTH_REGISTER_FAILED',
@@ -200,42 +209,6 @@ const UserController = {
         message: 'Logout failed',
         error: error?.message || String(err),
       });
-    }
-  },
-
-  async getTip(req: AuthRequest, res: Response) {
-    try {
-      if (!req.user?.id || !req.user.created_at) {
-        return res.status(401).json({ message: 'Not authorized' });
-      }
-
-      const userId = req.user.id;
-
-      const stats = await statsService.findByUserId(userId);
-      const milestones = await milestonesService.findUnlockedByUser(userId);
-
-      let lastMilestoneAt: Date | null = null;
-
-      if (milestones.length > 0) {
-        lastMilestoneAt = milestones
-          .map((m) => m.unlocked_at)
-          .sort((a, b) => b.getTime() - a.getTime())[0];
-      }
-
-      const streak = stats?.streak ?? null;
-
-      const tip = getTip({
-        created_at: new Date(req.user.created_at),
-        last_session_at: stats?.last_session_date
-          ? new Date(stats.last_session_date)
-          : null,
-        last_milestone_at: lastMilestoneAt,
-        streak,
-      });
-
-      return res.status(200).json(tip);
-    } catch {
-      return res.status(500).json({ message: 'Failed to get tips' });
     }
   },
 

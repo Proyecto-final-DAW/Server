@@ -6,6 +6,11 @@ export interface RoutineExercise {
   sets: number | null;
   reps: number | null;
   order_index: number | null;
+  /** Hydrated from the catalog at read time — not persisted on
+   *  routine_exercises rows. Drives the SetLogger input selection
+   *  (stretching → duration, bodyweight → reps only, etc.). */
+  category?: string;
+  equipment?: string;
 }
 
 export interface Routine {

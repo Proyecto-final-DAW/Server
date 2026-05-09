@@ -32,6 +32,24 @@ function parsePgEnumArray(value: unknown): string[] {
   });
 }
 
+/** Columns whose pg type is `numeric`/`decimal`. node-pg serialises
+ *  these as JS strings (preserving precision); the rest of the
+ *  codebase expects numbers, and a string-vs-number compare like
+ *  `Number(form.weight) !== profile.weight` is silently always true,
+ *  which made every profile save retransmit weight/height (and
+ *  trigger an unnecessary macro recompute downstream). */
+const NUMERIC_USER_FIELDS = ['weight', 'height'] as const;
+
+function coerceNumericField(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
 export function normalizeUserRow<T extends Record<string, unknown> | undefined>(
   row: T
 ): T {
@@ -49,6 +67,11 @@ export function normalizeUserRow<T extends Record<string, unknown> | undefined>(
     (out as Record<string, unknown>).equipment = parsePgEnumArray(
       out.equipment
     );
+  }
+  for (const field of NUMERIC_USER_FIELDS) {
+    if (field in out) {
+      (out as Record<string, unknown>)[field] = coerceNumericField(out[field]);
+    }
   }
   return out;
 }

@@ -122,6 +122,15 @@ export function createApp() {
     })
   );
 
+  // Health probe — load balancers / orchestrators / uptime monitors
+  // hit this to check liveness. Skips auth and the slow/limit chain
+  // (it's mounted before the routers but after CORS/sanitize). Body
+  // is small and stable so a 200 is the only signal: anything else
+  // means the process is wedged.
+  app.get('/health', (_req: Request, res: Response) => {
+    res.status(200).json({ status: 'ok' });
+  });
+
   app.use('/users', usersRouter);
   app.use('/profile', profileRouter);
   app.use('/stats', statsRouter);

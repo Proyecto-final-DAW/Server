@@ -52,6 +52,12 @@ enum ExerciseType {
   stretch
 }
 
+enum CardioIntensity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 model User {
   id                   Int              @id @default(autoincrement())
   name                 String           @db.VarChar(255)
@@ -69,6 +75,7 @@ model User {
   equipment            Equipment[]      @default([])
   days_per_week        String?          @db.VarChar(10)
   injuries             Injury[]         @default([])
+  injury_notes         String?          @db.VarChar(500)
   sleep_hours          Int?
   daily_calories       Int?
   protein_grams        Int?
@@ -118,10 +125,14 @@ model Stats {
   agility_level     Int       @default(1)
   tenacity_level    Int       @default(1)
   vigor_level       Int       @default(1)
-  streak            Int       @default(0)
-  best_streak       Int       @default(0)
-  last_session_date DateTime? @db.Date
-  updated_at        DateTime  @default(now()) @updatedAt
+  streak                       Int       @default(0)
+  best_streak                  Int       @default(0)
+  last_session_date            DateTime? @db.Date
+  last_qualifying_week_monday  DateTime? @db.Date
+  diet_streak                  Int       @default(0)
+  best_diet_streak             Int       @default(0)
+  last_diet_date               DateTime? @db.Date
+  updated_at                   DateTime  @default(now()) @updatedAt
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
@@ -144,12 +155,18 @@ model Session {
 }
 
 model SessionExercise {
-  id              Int          @id @default(autoincrement())
-  session_id      Int
-  exercise_api_id String       @db.VarChar(50)
-  name            String       @db.VarChar(200)
-  type            ExerciseType
-  order_index     Int
+  id               Int              @id @default(autoincrement())
+  session_id       Int
+  exercise_api_id  String           @db.VarChar(50)
+  name             String           @db.VarChar(200)
+  type             ExerciseType
+  order_index      Int
+  // Cardio metadata — populated only when the entry comes from the
+  // post-workout cardio log (bike, HIIT, treadmill…). Strength rows
+  // keep these as NULL and continue to live off the `sets` relation.
+  duration_minutes Int?
+  intensity        CardioIntensity?
+  distance_km      Decimal?         @db.Decimal(5, 2)
 
   session Session       @relation(fields: [session_id], references: [id], onDelete: Cascade)
   sets    ExerciseSet[]
@@ -163,6 +180,7 @@ model ExerciseSet {
   session_exercise_id Int
   reps                Int
   weight              Decimal @db.Decimal(6, 2)
+  duration_seconds    Int?
   order_index         Int
 
   session_exercise SessionExercise @relation(fields: [session_exercise_id], references: [id], onDelete: Cascade)

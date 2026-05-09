@@ -31,6 +31,75 @@ const DietController = {
       });
     }
   },
+
+  /**
+   * GET /diet/state — current diet streak + whether the user already
+   * logged today. Cheap read-only fetch the client uses to render the
+   * "✓ DIETA HOY" / "✓ REGISTRADO HOY" button without bouncing through
+   * the log endpoint.
+   */
+  async getState(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: 'Not authorized' });
+      }
+      const state = await dietService.getDietState(userId);
+      if (!state) {
+        return res.status(404).json({ message: 'Stats not found' });
+      }
+      const loggedToday = await dietService.isDietLoggedToday(userId);
+      return res.status(200).json({
+        diet_streak: state.diet_streak,
+        best_diet_streak: state.best_diet_streak,
+        last_diet_date: state.last_diet_date,
+        logged_today: loggedToday,
+      });
+    } catch (err: unknown) {
+      const error = err as Error;
+      return res.status(500).json({
+        message: 'Failed to get diet state',
+        error: error?.message || String(err),
+      });
+    }
+  },
+
+  /**
+   * POST /diet/log — marks today as a diet day for the user. Idempotent
+   * within the same day: a second call returns `alreadyLoggedToday=true`
+   * with the unchanged streak instead of doubling it.
+   */
+  async logToday(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: 'Not authorized' });
+      }
+      const result = await dietService.logDietForToday(userId);
+      if (!result) {
+        return res.status(404).json({
+          message: 'Stats not found. Complete onboarding first.',
+        });
+      }
+      return res.status(200).json({
+        diet_streak: result.diet_streak,
+        best_diet_streak: result.best_diet_streak,
+        last_diet_date: result.last_diet_date,
+        already_logged_today: result.alreadyLoggedToday,
+        vigor_before_xp: result.vigor_before_xp,
+        vigor_before_level: result.vigor_before_level,
+        vigor_after_xp: result.vigor_after_xp,
+        vigor_after_level: result.vigor_after_level,
+        vigor_delta: result.vigor_delta,
+      });
+    } catch (err: unknown) {
+      const error = err as Error;
+      return res.status(500).json({
+        message: 'Failed to log diet',
+        error: error?.message || String(err),
+      });
+    }
+  },
 };
 
 export default DietController;

@@ -1,14 +1,8 @@
-CREATE TABLE users (
-  id SERIAL PRIMARY KEY,
-  name VARCHAR(100) NOT NULL,
-  email VARCHAR(100) UNIQUE NOT NULL,
-  hashed_password TEXT NOT NULL,
-  tokens TEXT[] DEFAULT '{}',
-  age INTEGER,
-  weight DECIMAL(4, 1),
-  height DECIMAL(4, 1),
-  activity_level VARCHAR(100),
-  goal VARCHAR(100),
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
-);
+-- Intentionally empty.
+--
+-- The Postgres docker-compose service mounts this file as
+-- `/docker-entrypoint-initdb.d/init.sql` so the DB has *something*
+-- to run on first boot. The schema itself lives in `db/migrations/`
+-- and is applied via `dbmate up` from the Server's `npm run db:migrate`
+-- script — keeping the schema in one place (the migration history)
+-- avoids drift between this bootstrap file and the canonical state.

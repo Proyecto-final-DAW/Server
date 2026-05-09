@@ -79,44 +79,6 @@ const StatsController = {
     }
   },
 
-  async registerSession(req: AuthRequest, res: Response) {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ message: 'Not authorized' });
-      }
-
-      const { session_date } = req.body as { session_date?: string };
-      const date = session_date ? new Date(session_date) : undefined;
-
-      if (date && isNaN(date.getTime())) {
-        return res
-          .status(400)
-          .json({ message: 'Invalid session_date format. Use YYYY-MM-DD.' });
-      }
-
-      const result = await statsService.registerSession(userId, date);
-      if (!result) {
-        return res
-          .status(404)
-          .json({ message: 'Stats not found. Complete onboarding first.' });
-      }
-
-      return res.status(200).json({
-        streak: result.stats.streak,
-        best_streak: result.stats.best_streak,
-        last_session_date: result.stats.last_session_date,
-        changed: result.changed,
-      });
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to register session',
-        error: error?.message || String(err),
-      });
-    }
-  },
-
   async initStats(req: AuthRequest, res: Response) {
     try {
       const userId = req.user?.id;
@@ -135,6 +97,36 @@ const StatsController = {
       const error = err as Error & { code?: string };
       return res.status(500).json({
         message: 'Failed to initialize stats',
+        error: error?.message || String(err),
+      });
+    }
+  },
+
+  /**
+   * GET /stats/history — chronological per-session level snapshots.
+   * Powers the /progress radar's time selector ("AHORA / HACE 7D /
+   * HACE 30D / INICIO"); replayed from the session table because the
+   * stored stat values aren't time-stamped per save.
+   */
+  async getHistory(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: 'Not authorized' });
+      }
+      const limitRaw = req.query.limit;
+      const limit =
+        typeof limitRaw === 'string' ? parseInt(limitRaw, 10) : undefined;
+      const safeLimit =
+        limit !== undefined && Number.isFinite(limit) && limit > 0
+          ? Math.min(500, limit)
+          : 200;
+      const history = await statsService.getStatHistory(userId, safeLimit);
+      return res.status(200).json(history);
+    } catch (err: unknown) {
+      const error = err as Error & { code?: string };
+      return res.status(500).json({
+        message: 'Failed to get stat history',
         error: error?.message || String(err),
       });
     }

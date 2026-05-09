@@ -17,8 +17,22 @@ interface JwtError extends Error {
     | 'SyntaxError';
 }
 
+/**
+ * Bypass auth for local development WITHOUT requiring a JWT.
+ *
+ * Gated on BOTH `NODE_ENV === 'development'` AND an explicit
+ * `LOCAL_DEV_AUTH_BYPASS=1` env var. The double gate is intentional:
+ * `NODE_ENV` defaults wrong on too many platforms (Netlify treats
+ * preview branches as `development`, certain Docker base images don't
+ * set it, etc), so a single check would silently log every request
+ * in as user 1 if the env was misconfigured. Production deploys must
+ * never satisfy both conditions.
+ */
 function isLocalDevAuthBypass(): boolean {
-  return process.env.NODE_ENV === 'development';
+  return (
+    process.env.NODE_ENV === 'development' &&
+    process.env.LOCAL_DEV_AUTH_BYPASS === '1'
+  );
 }
 
 function bearerToken(header: string | undefined): string | undefined {

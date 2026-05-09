@@ -40,11 +40,10 @@ router.post(
   MacrosController.calculate
 );
 
-router.get(
-  '/:userId/tips',
-  authentication,
-  ensureSelf(),
-  UserController.getTip
-);
+// Note: there used to be a `GET /users/:userId/tips` here. Removed
+// because no client called it and the underlying tips catalog only
+// has one entry per category, so the random-pick logic was effectively
+// dead. If tips come back, add the route AND the consumer in the same
+// PR so the API doesn't ship orphan endpoints.
 
 export default router;

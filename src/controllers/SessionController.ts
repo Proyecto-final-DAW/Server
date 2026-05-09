@@ -1,5 +1,6 @@
 import { Response } from 'express';
 
+import pool from '../db/pool';
 import {
   CreateSessionExerciseInput,
   CreateSessionInput,
@@ -27,14 +28,28 @@ const isValidDate = (value: unknown): value is string => {
 const isValidSet = (unknown: unknown): unknown is CreateSessionSetInput => {
   if (!unknown || typeof unknown !== 'object') return false;
   const record = unknown as Record<string, unknown>;
-  return (
+
+  const repsValid =
     typeof record.reps === 'number' &&
     Number.isFinite(record.reps) &&
-    record.reps > 0 &&
+    record.reps >= 0;
+  const weightValid =
     typeof record.weight === 'number' &&
     Number.isFinite(record.weight) &&
-    record.weight >= 0
-  );
+    record.weight >= 0;
+
+  if (!repsValid || !weightValid) return false;
+
+  // Stretch / mobility sets log seconds instead of reps; the Zod validator
+  // already enforced "reps > 0 OR duration_seconds present", so accept
+  // either path here. Without this the controller rejects every stretch
+  // set with reps=0 even though the body just passed validateBody.
+  const hasDuration =
+    typeof record.duration_seconds === 'number' &&
+    Number.isFinite(record.duration_seconds) &&
+    record.duration_seconds > 0;
+
+  return (record.reps as number) > 0 || hasDuration;
 };
 
 const isValidExercise = (
@@ -42,16 +57,27 @@ const isValidExercise = (
 ): unknown is CreateSessionExerciseInput => {
   if (!unknown || typeof unknown !== 'object') return false;
   const record = unknown as Record<string, unknown>;
-  return (
+
+  const baseValid =
     typeof record.exercise_api_id === 'string' &&
     record.exercise_api_id.length > 0 &&
     typeof record.name === 'string' &&
     record.name.length > 0 &&
     VALID_TYPES.includes(record.type as ExerciseType) &&
     Array.isArray(record.sets) &&
-    record.sets.length > 0 &&
-    record.sets.every(isValidSet)
-  );
+    record.sets.every(isValidSet);
+
+  if (!baseValid) return false;
+
+  // Cardio entries log a duration_minutes instead of sets, so an empty
+  // sets array is legitimate when a duration is provided. Strength
+  // entries still require at least one set.
+  const hasDuration =
+    typeof record.duration_minutes === 'number' &&
+    record.duration_minutes > 0;
+  if (hasDuration) return true;
+
+  return Array.isArray(record.sets) && record.sets.length > 0;
 };
 
 const SessionController = {
@@ -93,7 +119,27 @@ const SessionController = {
       if (!exercises.every(isValidExercise)) {
         return res.status(400).json({
           message:
-            'Each exercise must have exercise_api_id, name, type (strength|cardio|explosive|stretch), and a non-empty sets array with { reps > 0, weight >= 0 }',
+            'Each exercise must have exercise_api_id, name, type (strength|cardio|explosive|stretch), and either a non-empty sets array (each set: weight >= 0 plus reps > 0 OR duration_seconds > 0) or duration_minutes > 0 for cardio entries',
+        });
+      }
+
+      // One-session-per-day rule. Mirrors the diet log: once you've
+      // recorded today's session, the streak/XP rewards are locked in
+      // and a second save would just be noise (XP already capped, no
+      // streak change, but extra row in the DB and a confusing extra
+      // "+0 XP" popup). Reject with 409 so the client can swap the
+      // button to "ya entrenaste hoy".
+      const existingToday = await pool.query<{ id: number }>(
+        `SELECT id FROM sessions
+          WHERE user_id = $1 AND date = $2
+          LIMIT 1`,
+        [userId, date]
+      );
+      if (existingToday.rowCount && existingToday.rowCount > 0) {
+        return res.status(409).json({
+          code: 'SESSION_ALREADY_LOGGED_TODAY',
+          message:
+            'Ya has registrado una sesion para esta fecha. Solo cuenta una sesion por dia.',
         });
       }
 

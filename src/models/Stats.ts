@@ -1,13 +1,16 @@
 /**
  * Stats.ts — RPG stats data shape
  *
- * 6 RPG system stats:
- * - Strength    → weight lifted in exercises
- * - Endurance   → sets × reps
- * - Stamina     → cardio exercises
- * - Agility     → body weight loss
- * - Tenacity    → streak and total sessions
- * - Vigor       → hitting nutrition macros
+ * 6 RPG pillars (mapping to the formulas in `progression.service.ts`):
+ * - Strength    → strength-exercise volume (weight × reps)
+ * - Endurance   → cardio (minutes × intensity)
+ * - Stamina     → total set count across the session
+ * - Agility     → base + half of cardio XP
+ * - Tenacity    → weekly training streak (lives in `session.service`)
+ * - Vigor       → daily diet logging + nutrition macros (lives in `diet.service`)
+ *
+ * The previous version of this comment had stamina/endurance swapped and
+ * agility tied to "body weight loss" — both wrong vs the actual formulas.
  */
 
 export interface Stats {

@@ -28,4 +28,6 @@ export interface OnboardingFormData {
   equipment?: Equipment[];
   daysPerWeek?: DaysPerWeek;
   injuries?: Injury[];
+  /** Free-text detail surfaced by the wizard when 'OTHER' is among `injuries`. */
+  injuryNotes?: string;
 }

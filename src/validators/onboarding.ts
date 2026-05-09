@@ -26,6 +26,16 @@ const injurySchema = z.enum(['NONE', 'KNEE', 'BACK', 'SHOULDER', 'OTHER']);
 /**
  * Body for `PUT /onboarding/:userId/submit`. The service treats an empty string
  * the same as undefined (skipped), so optional empty strings are tolerated.
+ *
+ * Fields the macro calculator NEEDS to produce a valid plan
+ * (`sex`, `activityLevel`, `goals`, `equipment`, `daysPerWeek`) are
+ * required here. The wizard already enforces these per-step on the
+ * client, but a direct API call previously could submit with any of
+ * them empty — onboarding then completed but `getCurrentMacros`
+ * threw `ONBOARDING_INCOMPLETE` on the next /diet GET, leaving the
+ * user in a "completed but unusable" state. `experienceLevel` and
+ * `injuries`/`injuryNotes` stay optional (informational, not used by
+ * the calorie formula).
  */
 export const submitOnboardingSchema = z
   .object({
@@ -44,13 +54,21 @@ export const submitOnboardingSchema = z
     height: z
       .string()
       .regex(/^-?\d+(\.\d+)?$/, 'height must be a numeric string'),
-    sex: sexSchema.optional(),
-    activityLevel: activityLevelSchema.optional(),
-    goals: z.array(goalSchema).optional(),
+    sex: sexSchema,
+    activityLevel: activityLevelSchema,
+    goals: z.array(goalSchema).min(1, 'goals must include at least one entry'),
+    equipment: z
+      .array(equipmentSchema)
+      .min(1, 'equipment must include at least one entry'),
+    daysPerWeek: daysPerWeekSchema,
     experienceLevel: experienceLevelSchema.optional(),
-    equipment: z.array(equipmentSchema).optional(),
-    daysPerWeek: daysPerWeekSchema.optional(),
     injuries: z.array(injurySchema).optional(),
+    /** Free-text detail surfaced when the user marks 'OTHER' in the
+     *  injuries step. Optional — capped at 500 chars to match the DB
+     *  column and keep payloads bounded. */
+    injuryNotes: trimmed(
+      z.string().max(500, 'injuryNotes must be at most 500 characters')
+    ).optional(),
   })
   .strict();
 
