@@ -38,6 +38,14 @@ async function startServer() {
     );
     process.exit(1);
   }
+  // `createApp()` is what loads `.env.local` / `.env.production` via
+  // dotenv. The LOCAL_DEV_USER_ID and JWT_SECRET checks below depend
+  // on those env vars actually being populated, so build the app
+  // FIRST, then run the runtime gates. (LOCAL_DEV_AUTH_BYPASS is
+  // checked before createApp because it's a pure environment toggle
+  // and doesn't read app-loaded .env.* files.)
+  const app = createApp();
+
   if (process.env.LOCAL_DEV_AUTH_BYPASS === '1') {
     // Refuse to boot if LOCAL_DEV_USER_ID isn't an explicit positive
     // integer. The middleware falls back to '1' when the env is
@@ -72,8 +80,6 @@ async function startServer() {
     );
     process.exit(1);
   }
-
-  const app = createApp();
 
   try {
     await connectDatabase();
