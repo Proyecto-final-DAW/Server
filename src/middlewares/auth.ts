@@ -76,7 +76,13 @@ export const authentication = async (
     }
 
     const jwtSecret = process.env.JWT_SECRET as string;
-    const payload = jwt.verify(token, jwtSecret) as JwtPayload;
+    // Explicit algorithm allowlist (defense-in-depth). jsonwebtoken@9
+    // rejects `alg:none` by default, but pinning to HS256 prevents
+    // algorithm-confusion attacks if the secret is ever exposed via a
+    // route that accepts public-key-shaped material.
+    const payload = jwt.verify(token, jwtSecret, {
+      algorithms: ['HS256'],
+    }) as JwtPayload;
 
     const user = await userService.findById(payload.userId);
     if (!user) {

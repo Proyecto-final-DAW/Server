@@ -164,9 +164,15 @@ export const update = async (
   try {
     await client.query('BEGIN');
 
-    // Ensure ownership exists
+    // Lock the routine row for the duration of the transaction. Two
+    // concurrent updates from the same user (two tabs editing the
+    // same routine) used to both DELETE all `routine_exercises` then
+    // re-INSERT, interleaving rows from two different states and
+    // leaving a routine that was half of edit A and half of edit B.
+    // FOR UPDATE serialises them — second writer waits for first to
+    // COMMIT, then runs against the post-write state.
     const exists = await client.query(
-      `SELECT id FROM routines WHERE id = $1 AND user_id = $2`,
+      `SELECT id FROM routines WHERE id = $1 AND user_id = $2 FOR UPDATE`,
       [routineId, userId]
     );
     if (exists.rowCount === 0) {

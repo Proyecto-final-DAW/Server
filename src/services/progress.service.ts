@@ -2,6 +2,7 @@ import pool from '../db/pool';
 import { resolveMacroInputs } from '../utils/macroProfile';
 import { getExerciseMetaById } from './exercise.service';
 import { calculateCalories } from './macros.service';
+import { normalizeUserRow } from './user.service';
 
 export interface WeightEntry {
   date: string;
@@ -82,7 +83,15 @@ export const registerWeight = async (
       [weight, userId]
     );
 
-    const macroInputs = resolveMacroInputs(updatedUserResult.rows[0]);
+    // `pg` returns enum-array columns (`Goal[]`) as the literal Postgres
+    // string `'{LOSE_FAT}'` rather than a JS array. Without
+    // `normalizeUserRow`, `resolveMacroInputs` does `Array.isArray(goals)`
+    // → false → returns null → the macro recalc branch is silently
+    // skipped, so logging a 5kg weight change updates `users.weight`
+    // but never recomputes daily_calories/protein/etc — the diet
+    // drifts out of sync with the real body weight.
+    const normalizedUser = normalizeUserRow(updatedUserResult.rows[0]);
+    const macroInputs = resolveMacroInputs(normalizedUser);
 
     if (macroInputs) {
       const macros = calculateCalories(

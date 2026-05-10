@@ -182,6 +182,19 @@ export const submitOnboarding = async (
       row.carb_grams = targets.carb_grams;
     }
 
+    // Atomically create the stats row inside the same transaction.
+    // Previously the client made a separate POST /stats/init call
+    // after onboarding submit — if that second call failed (network
+    // blip, browser closed, 429) the user was permanently stuck:
+    // re-submit threw ONBOARDING_ALREADY_COMPLETED, every session
+    // save threw STATS_NOT_FOUND. ON CONFLICT keeps the explicit
+    // /stats/init endpoint working as a defensive no-op for legacy
+    // clients that still call it.
+    await client.query(
+      `INSERT INTO stats (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`,
+      [userId]
+    );
+
     await client.query('COMMIT');
 
     const { hashed_password: _hp, tokens: _tokens, ...user } = row;

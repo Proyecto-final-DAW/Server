@@ -32,6 +32,10 @@ router.post('/auth/logout', authentication, UserController.logout);
 router.get('/cards', authentication, UserController.getCards);
 router.get('/stats', authentication, UserController.getStatsForCurrentUser);
 
+// GDPR-compliant account deletion. Authentication-only (no extra
+// confirmation) — the client surfaces a confirm dialog before calling.
+router.delete('/me', authentication, UserController.deleteMe);
+
 router.post(
   '/:userId/macros/calculate',
   authentication,

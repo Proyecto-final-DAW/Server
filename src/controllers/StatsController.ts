@@ -25,52 +25,11 @@ const StatsController = {
     }
   },
 
-  async updateStats(req: AuthRequest, res: Response) {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ message: 'Not authorized' });
-      }
-
-      const allowedFields = [
-        'strength',
-        'endurance',
-        'stamina',
-        'agility',
-        'tenacity',
-        'vigor',
-        'strength_level',
-        'endurance_level',
-        'stamina_level',
-        'agility_level',
-        'tenacity_level',
-        'vigor_level',
-      ];
-
-      const data = req.body as Record<string, unknown>;
-      const filtered: Record<string, unknown> = {};
-      for (const key of Object.keys(data)) {
-        if (allowedFields.includes(key)) {
-          filtered[key] = data[key];
-        }
-      }
-
-      if (Object.keys(filtered).length === 0) {
-        return res.status(400).json({ message: 'No valid fields to update' });
-      }
-
-      const updated = await statsService.updateStats(userId, filtered);
-      if (!updated) {
-        return res
-          .status(404)
-          .json({ message: 'Stats not found. Complete onboarding first.' });
-      }
-
-      return res.status(200).json(updated);
-    } catch (err) {
-      return sendServerError(res, err, 'StatsController.updateStats');
-    }
-  },
+  // `updateStats` controller method removed alongside its route. Stats
+  // are derived data and only move through session.service.processSession
+  // and diet.service.logDietForToday — both of which call the
+  // statsService.updateStats helper directly with vetted deltas.
+  // Exposing a public PUT was a self-promote-to-Maestro-Supremo hole.
 
   async initStats(req: AuthRequest, res: Response) {
     try {

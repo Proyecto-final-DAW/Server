@@ -51,15 +51,50 @@ export const submitOnboardingSchema = z
         .min(1, 'name is required')
         .max(255, 'name must be at most 255 characters')
     ),
+    // birth_date sanity bounds. The macro formula uses `age = years
+    // since birth` and rejects age < 14 (Mifflin-St Jeor outside its
+    // validated range). Without the refine, a user typing "today" or
+    // a future date passed Zod, propagated into onboarding.service,
+    // and produced an unhelpful 500.
     birthDate: z
       .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, 'birthDate must be in YYYY-MM-DD format'),
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'birthDate must be in YYYY-MM-DD format')
+      .refine(
+        (v) => {
+          const d = new Date(v);
+          if (Number.isNaN(d.getTime())) return false;
+          const today = new Date();
+          const fourteenYearsAgo = new Date(
+            today.getFullYear() - 14,
+            today.getMonth(),
+            today.getDate()
+          );
+          const oneTwentyYearsAgo = new Date(
+            today.getFullYear() - 120,
+            today.getMonth(),
+            today.getDate()
+          );
+          return d <= fourteenYearsAgo && d >= oneTwentyYearsAgo;
+        },
+        { message: 'birthDate must be between 14 and 120 years ago' }
+      ),
+    // Numeric-string with no leading minus + a >0 refine. The earlier
+    // `^-?\d+(\.\d+)?$` regex let `-50` through, then onboarding.service
+    // called calculateCalories which threw `RangeError("must be positive")`
+    // — surfacing as a 500 instead of a clean 400. The refine also rejects
+    // `0` (which is regex-valid and produces nonsensical macros).
     weight: z
       .string()
-      .regex(/^-?\d+(\.\d+)?$/, 'weight must be a numeric string'),
+      .regex(/^\d+(\.\d+)?$/, 'weight must be a positive numeric string')
+      .refine((v) => Number(v) > 0 && Number(v) <= 500, {
+        message: 'weight must be a number between 0 and 500 kg',
+      }),
     height: z
       .string()
-      .regex(/^-?\d+(\.\d+)?$/, 'height must be a numeric string'),
+      .regex(/^\d+(\.\d+)?$/, 'height must be a positive numeric string')
+      .refine((v) => Number(v) > 0 && Number(v) <= 300, {
+        message: 'height must be a number between 0 and 300 cm',
+      }),
     sex: sexSchema,
     activityLevel: activityLevelSchema,
     goals: z.array(goalSchema).min(1, 'goals must include at least one entry'),

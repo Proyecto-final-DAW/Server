@@ -12,12 +12,14 @@ const router = express.Router();
 // ensureSelf).
 router.get('/history', authentication, StatsController.getHistory);
 router.get('/:userId', authentication, ensureSelf(), StatsController.getStats);
-router.put(
-  '/:userId',
-  authentication,
-  ensureSelf(),
-  StatsController.updateStats
-);
+// `PUT /:userId` (StatsController.updateStats) was removed: the route
+// allowlisted every `*_level` column, so any authenticated user could
+// `PUT /stats/<my id>` with `{strength_level: 99, ...}` and instantly
+// hit the T6 LEYENDA gate. Stats are derived data — they only move
+// through `session.service.processSession` and `diet.service.logDietForToday`.
+// No client ever called this endpoint (verified via grep on Client/src),
+// so the deletion is safe.
+//
 // Note: there used to be a `POST /stats/:userId/session` here that
 // duplicated the streak update logic of `session.service.processSession`.
 // Removed because no client called it (the actual session-save flow

@@ -230,7 +230,11 @@ enum ConditionType {
 
 model Milestone {
   id              Int           @id @default(autoincrement())
-  name            String        @db.VarChar(100)
+  // UNIQUE on `name` so seed migrations stay idempotent — a re-run
+  // of `seed_milestones` would otherwise duplicate every row and the
+  // next session save would fire the same unlock multiple times.
+  // See migration 20260516120000_milestones_unique_name.
+  name            String        @unique(map: "milestones_name_key") @db.VarChar(100)
   description     String        @db.Text
   condition_type  ConditionType
   condition_value Int

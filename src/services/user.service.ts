@@ -159,31 +159,56 @@ export const updateUserMacroTargets = async (
 const MAX_TOKENS_PER_USER = 10;
 
 export const addToken = async (userId: number, token: string) => {
-  // Read current tokens, drop any that no longer verify (expired or
-  // signed under a rotated secret) — this prunes the array as a side
-  // effect of every login. Then append the new token and trim to the
-  // most recent MAX so the column can't balloon under heavy use.
+  // Read-modify-write the `tokens` array atomically under a row lock.
+  // Without this, two parallel logins from the same user (phone +
+  // tablet within ~1s) both read the same `previous` array, both push
+  // their own token, and the second writer silently drops the first
+  // device's token — symptom from the user is "I logged in but it
+  // keeps logging me out." `SELECT … FOR UPDATE` serialises the two
+  // calls so each sees the other's append.
   const jwtSecret = process.env.JWT_SECRET as string;
-  const current = await pool.query<{ tokens: string[] | null }>(
-    'SELECT tokens FROM users WHERE id = $1',
-    [userId]
-  );
-  const previous = current.rows[0]?.tokens ?? [];
-  const valid = previous.filter((t) => {
-    try {
-      jwt.verify(t, jwtSecret);
-      return true;
-    } catch {
-      return false;
-    }
-  });
-  const next = [...valid, token].slice(-MAX_TOKENS_PER_USER);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const current = await client.query<{ tokens: string[] | null }>(
+      'SELECT tokens FROM users WHERE id = $1 FOR UPDATE',
+      [userId]
+    );
+    const previous = current.rows[0]?.tokens ?? [];
+    const valid = previous.filter((t) => {
+      try {
+        // Same HS256 allowlist as the auth middleware — keeps the prune
+        // step honest even if jsonwebtoken's defaults ever change.
+        jwt.verify(t, jwtSecret, { algorithms: ['HS256'] });
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    const next = [...valid, token].slice(-MAX_TOKENS_PER_USER);
 
-  const result = await pool.query(
-    'UPDATE users SET tokens = $1::text[] WHERE id = $2 RETURNING tokens',
-    [next, userId]
-  );
-  return result.rows[0]?.tokens || [];
+    const result = await client.query(
+      'UPDATE users SET tokens = $1::text[] WHERE id = $2 RETURNING tokens',
+      [next, userId]
+    );
+    await client.query('COMMIT');
+    return result.rows[0]?.tokens || [];
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
+  }
+};
+
+/**
+ * Hard-delete the user. FK cascades on sessions / routines / stats /
+ * weight_logs / user_class_state / user_milestones do the cleanup
+ * automatically; audit_logs SET NULL on actor/target so the security
+ * trail survives the GDPR request.
+ */
+export const deleteUser = async (userId: number): Promise<void> => {
+  await pool.query('DELETE FROM users WHERE id = $1', [userId]);
 };
 
 export const removeToken = async (userId: number, token: string) => {

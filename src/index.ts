@@ -45,6 +45,20 @@ async function startServer() {
     );
   }
 
+  // JWT_SECRET strength check. The presence guard in app.ts catches
+  // an empty string but not a weak one (e.g. `JWT_SECRET=foo`). HS256
+  // against a 4-char secret is brute-forceable in seconds with hashcat.
+  // Require >= 32 chars (~128 bits of entropy if the operator follows
+  // the README's `openssl rand -hex 32` recipe).
+  const jwtSecret = process.env.JWT_SECRET ?? '';
+  if (jwtSecret.length < 32) {
+    console.error(
+      `❌ JWT_SECRET must be at least 32 characters (got ${jwtSecret.length}). ` +
+        'Generate one with: openssl rand -hex 32. Refusing to start.'
+    );
+    process.exit(1);
+  }
+
   const app = createApp();
 
   try {

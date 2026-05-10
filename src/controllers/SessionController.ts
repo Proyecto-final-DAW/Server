@@ -158,6 +158,13 @@ const SessionController = {
           .status(404)
           .json({ message: 'Stats not found. Complete onboarding first.' });
       }
+      if (typedError.code === 'ROUTINE_NOT_OWNED') {
+        // Don't leak whether the routine exists at all — `not found`
+        // covers both "no such routine" and "exists but belongs to
+        // another user". The client only ever passes routines from
+        // `/routines` (i.e. its own), so a 404 here means tampering.
+        return res.status(404).json({ message: 'Routine not found' });
+      }
       // Race-condition fallback for the "one session per day" rule:
       // the pre-INSERT SELECT above narrows the window but two concurrent
       // saves can still both pass the check. The DB-side UNIQUE

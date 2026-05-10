@@ -349,104 +349,119 @@ export const getWeeklySummary = async (
 };
 
 /**
- * Inserts a new session with all its nested exercises and sets inside a single
- * transaction. If any insert fails, the whole session is rolled back.
+ * Internal helper used by `processSession` to insert a session +
+ * its exercises + its sets inside a CALLER-MANAGED transaction.
+ * Returns the new session id.
+ *
+ * Caller responsibilities:
+ *   - call BEGIN before, COMMIT/ROLLBACK after
+ *   - release the client
+ *   - read back the session via getSessionDetail AFTER commit
+ *
+ * The stats read + update path runs against the same client so the
+ * full read-compute-write cycle is serialised by one row lock.
  */
-export const createSession = async (
+const insertSessionInTx = async (
+  client: import('pg').PoolClient,
   userId: number,
   input: CreateSessionInput
-): Promise<Session> => {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-
-    const sessionResult = await client.query(
-      `INSERT INTO sessions (user_id, routine_id, date)
-       VALUES ($1, $2, $3)
-       RETURNING id`,
-      [userId, input.routine_id ?? null, input.date]
+): Promise<number> => {
+  // Routine-ownership check. The FK on `sessions.routine_id` only
+  // enforces that *some* routine row exists — it does not constrain
+  // the routine to belong to this user. Without this query, Bob can
+  // submit a session referencing Alice's routine ID and pollute her
+  // analytics + leak the existence/IDs of her routines through his
+  // session-history endpoint. The check has to happen inside the
+  // transaction so a concurrent DELETE of the routine doesn't slip
+  // a now-orphan reference past the FK.
+  if (input.routine_id !== null && input.routine_id !== undefined) {
+    const owns = await client.query<{ id: number }>(
+      `SELECT id FROM routines
+        WHERE id = $1 AND user_id = $2
+        LIMIT 1`,
+      [input.routine_id, userId]
     );
-    const sessionId = sessionResult.rows[0].id as number;
-
-    const seValues: unknown[] = [];
-    const sePlaceholders = input.exercises
-      .map((exercise, i) => {
-        const base = i * 8;
-        seValues.push(
-          sessionId,
-          exercise.exercise_api_id,
-          exercise.name,
-          exercise.type,
-          i,
-          exercise.duration_minutes ?? null,
-          exercise.intensity ?? null,
-          exercise.distance_km ?? null
-        );
-        // Cast intensity placeholder to the enum type so a NULL on a
-        // strength entry doesn't trip Postgres parameter type inference.
-        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}::"CardioIntensity", $${base + 8})`;
-      })
-      .join(', ');
-
-    const seResult = await client.query(
-      `INSERT INTO session_exercises (session_id, exercise_api_id, name, type, order_index, duration_minutes, intensity, distance_km)
-       VALUES ${sePlaceholders}
-       RETURNING id, order_index`,
-      seValues
-    );
-
-    const seIdByOrder = new Map<number, number>();
-    for (const row of seResult.rows as Array<{
-      id: number;
-      order_index: number;
-    }>) {
-      seIdByOrder.set(row.order_index, row.id);
+    if (owns.rowCount === 0) {
+      const err = new Error('ROUTINE_NOT_OWNED') as Error & { code: string };
+      err.code = 'ROUTINE_NOT_OWNED';
+      throw err;
     }
-
-    const setValues: unknown[] = [];
-    const setPlaceholders: string[] = [];
-    let paramIdx = 0;
-    input.exercises.forEach((exercise, exIdx) => {
-      const sessionExerciseId = seIdByOrder.get(exIdx);
-      if (sessionExerciseId === undefined) {
-        throw new Error(`Missing session_exercise id for order ${exIdx}`);
-      }
-      exercise.sets.forEach((set, setIdx) => {
-        setValues.push(
-          sessionExerciseId,
-          set.reps,
-          set.weight,
-          set.duration_seconds ?? null,
-          setIdx
-        );
-        setPlaceholders.push(
-          `($${paramIdx + 1}, $${paramIdx + 2}, $${paramIdx + 3}, $${paramIdx + 4}, $${paramIdx + 5})`
-        );
-        paramIdx += 5;
-      });
-    });
-
-    if (setPlaceholders.length > 0) {
-      await client.query(
-        `INSERT INTO exercise_sets (session_exercise_id, reps, weight, duration_seconds, order_index)
-         VALUES ${setPlaceholders.join(', ')}`,
-        setValues
-      );
-    }
-
-    await client.query('COMMIT');
-
-    const created = await getSessionDetail(userId, sessionId);
-    if (!created) {
-      throw new Error('Failed to read back created session');
-    }
-    return created;
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
   }
+
+  const sessionResult = await client.query(
+    `INSERT INTO sessions (user_id, routine_id, date)
+     VALUES ($1, $2, $3)
+     RETURNING id`,
+    [userId, input.routine_id ?? null, input.date]
+  );
+  const sessionId = sessionResult.rows[0].id as number;
+  const seValues: unknown[] = [];
+  const sePlaceholders = input.exercises
+    .map((exercise, i) => {
+      const base = i * 8;
+      seValues.push(
+        sessionId,
+        exercise.exercise_api_id,
+        exercise.name,
+        exercise.type,
+        i,
+        exercise.duration_minutes ?? null,
+        exercise.intensity ?? null,
+        exercise.distance_km ?? null
+      );
+      // Cast intensity placeholder to the enum type so a NULL on a
+      // strength entry doesn't trip Postgres parameter type inference.
+      return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}::"CardioIntensity", $${base + 8})`;
+    })
+    .join(', ');
+
+  const seResult = await client.query(
+    `INSERT INTO session_exercises (session_id, exercise_api_id, name, type, order_index, duration_minutes, intensity, distance_km)
+     VALUES ${sePlaceholders}
+     RETURNING id, order_index`,
+    seValues
+  );
+
+  const seIdByOrder = new Map<number, number>();
+  for (const row of seResult.rows as Array<{
+    id: number;
+    order_index: number;
+  }>) {
+    seIdByOrder.set(row.order_index, row.id);
+  }
+
+  const setValues: unknown[] = [];
+  const setPlaceholders: string[] = [];
+  let paramIdx = 0;
+  input.exercises.forEach((exercise, exIdx) => {
+    const sessionExerciseId = seIdByOrder.get(exIdx);
+    if (sessionExerciseId === undefined) {
+      throw new Error(`Missing session_exercise id for order ${exIdx}`);
+    }
+    exercise.sets.forEach((set, setIdx) => {
+      setValues.push(
+        sessionExerciseId,
+        set.reps,
+        set.weight,
+        set.duration_seconds ?? null,
+        setIdx
+      );
+      setPlaceholders.push(
+        `($${paramIdx + 1}, $${paramIdx + 2}, $${paramIdx + 3}, $${paramIdx + 4}, $${paramIdx + 5})`
+      );
+      paramIdx += 5;
+    });
+  });
+
+  if (setPlaceholders.length > 0) {
+    await client.query(
+      `INSERT INTO exercise_sets (session_exercise_id, reps, weight, duration_seconds, order_index)
+       VALUES ${setPlaceholders.join(', ')}`,
+      setValues
+    );
+  }
+
+  return sessionId;
 };
 
 /**
@@ -657,89 +672,14 @@ const DAILY_XP_CAPS: Record<string, number> = {
   agility: 30,
 };
 
-/**
- * Sums XP earned today from every session OTHER than `excludeSessionId`,
- * by replaying `calculateGains` over each one. Reading the raw exercise
- * data and recomputing (rather than storing daily totals) keeps the data
- * model simple — there's no "xp_today_*" snapshot column to drift, and a
- * future change to `calculateGains` automatically rebalances the daily
- * totals on the next save.
- *
- * Returns both the per-stat totals and the count of prior sessions, so
- * the caller can also gate "first-session-only" rewards (tenacity/vigor)
- * without a second query.
- */
-const sumPriorGainsForDate = async (
-  userId: number,
-  date: string,
-  excludeSessionId: number
-): Promise<{ totals: Record<string, number>; sessionCount: number }> => {
-  const sessionResult = await pool.query<{ id: number }>(
-    `SELECT id FROM sessions
-        WHERE user_id = $1 AND date = $2 AND id != $3`,
-    [userId, date, excludeSessionId]
-  );
-  const sessionIds = sessionResult.rows.map((r) => r.id);
-
-  if (sessionIds.length === 0) {
-    return { totals: {}, sessionCount: 0 };
-  }
-
-  const exercisesResult = await pool.query<{
-    id: number;
-    session_id: number;
-    exercise_api_id: string;
-    name: string;
-    type: ExerciseType;
-    duration_minutes: number | null;
-    intensity: CardioIntensity | null;
-  }>(
-    `SELECT id, session_id, exercise_api_id, name, type, duration_minutes, intensity
-       FROM session_exercises
-      WHERE session_id = ANY($1::int[])`,
-    [sessionIds]
-  );
-  const exerciseRows = exercisesResult.rows;
-  const exerciseIds = exerciseRows.map((e) => e.id);
-  const setsByExercise = await getSetsForExercises(exerciseIds);
-
-  // Group adapted exercises per session so each session's gains can be
-  // computed independently — calculateGains has per-exercise caps that
-  // wouldn't apply correctly if everything was flattened.
-  const exercisesBySession = new Map<number, CreateSessionExerciseInput[]>();
-  for (const e of exerciseRows) {
-    const adapted: CreateSessionExerciseInput = {
-      exercise_api_id: e.exercise_api_id,
-      name: e.name,
-      type: e.type,
-      sets: (setsByExercise.get(e.id) ?? []).map((s) => ({
-        reps: s.reps,
-        weight: s.weight,
-        duration_seconds: s.duration_seconds,
-      })),
-      duration_minutes: e.duration_minutes ?? undefined,
-      intensity: e.intensity ?? undefined,
-    };
-    const arr = exercisesBySession.get(e.session_id) ?? [];
-    arr.push(adapted);
-    exercisesBySession.set(e.session_id, arr);
-  }
-
-  const totals: Record<string, number> = {
-    strength: 0,
-    endurance: 0,
-    stamina: 0,
-    agility: 0,
-  };
-  for (const exercises of exercisesBySession.values()) {
-    const priorGains = calculateGains(exercises);
-    for (const [key, gain] of priorGains) {
-      totals[key] = (totals[key] ?? 0) + gain.xp;
-    }
-  }
-
-  return { totals, sessionCount: sessionIds.length };
-};
+// `sumPriorGainsForDate` was the read-back of "what did the user
+// already earn today" so the daily-cap branch could subtract it. With
+// the unique(user_id, date) index in place, the query always returned
+// 0 prior sessions — making this function dead code on every call.
+// Removed; processSession's daily-cap branch now uses an empty totals
+// snapshot, preserving the cap logic shape for the day the constraint
+// is relaxed (multi-session-per-day) without the round-trip cost on
+// every save.
 
 /**
  * Processes a new training session:
@@ -753,174 +693,206 @@ export const processSession = async (
   userId: number,
   input: CreateSessionInput
 ) => {
-  const currentStats = await statsService.findByUserId(userId);
-  if (!currentStats) {
-    const error = new Error('Stats not initialized');
-    (error as Error & { code: string }).code = 'STATS_NOT_FOUND';
-    throw error;
-  }
-
   const bodyweight = await getUserBodyweightKg(userId);
   const resolved = applyBodyweightLoad(resolveExerciseTypes(input), bodyweight);
 
-  const session = await createSession(userId, resolved);
+  // Open ONE transaction for the entire write path. Two concurrent
+  // saves for the same user used to read the same `currentStats`,
+  // compute deltas independently, and have the second writer clobber
+  // the first — silently destroying XP. The unique(user_id, date)
+  // index only prevents duplicate same-day inserts; backdating
+  // yesterday-then-today is a different-date pair that still raced.
+  // Locking the stats row inside the same transaction as the session
+  // insert serialises every save for a user without blocking saves
+  // for different users.
+  type StatsRow = {
+    strength: number;
+    strength_level: number;
+    endurance: number;
+    endurance_level: number;
+    stamina: number;
+    stamina_level: number;
+    agility: number;
+    agility_level: number;
+    tenacity: number;
+    tenacity_level: number;
+    vigor: number;
+    vigor_level: number;
+    streak: number;
+    best_streak: number;
+    last_session_date: string | Date | null;
+    last_qualifying_week_monday: string | Date | null;
+    [key: string]: unknown;
+  };
 
-  const gains = calculateGains(resolved.exercises);
+  const client = await pool.connect();
+  let sessionId: number;
+  let currentStats: StatsRow;
+  let updatedStats: Record<string, unknown>;
+  let gains: ReturnType<typeof calculateGains>;
+  let isToday: boolean;
+  let tenacityGain = 0;
+  let vigorGain = 0;
+  let streak: number;
+  try {
+    await client.query('BEGIN');
 
-  const today = localTodayISO();
-  const isToday = session.date === today;
+    sessionId = await insertSessionInTx(client, userId, resolved);
 
-  // Daily-cap headroom. If the user already trained earlier today, replay
-  // those sessions' gains and shrink each stat's new gain so total daily
-  // XP per stat never exceeds DAILY_XP_CAPS. Backdated sessions skip this
-  // (they have their own day's allowance, untouched by other days).
-  let priorSessionsToday = 0;
-  if (isToday) {
-    const earnedToday = await sumPriorGainsForDate(
-      userId,
-      session.date,
-      session.id
+    // Lock the stats row for the duration of the transaction. This is
+    // the line that closes the lost-update race: any other concurrent
+    // processSession for the same user will block here until we
+    // COMMIT, then read the updated row.
+    const lockResult = await client.query(
+      `SELECT *,
+              last_session_date::text AS last_session_date,
+              last_qualifying_week_monday::text AS last_qualifying_week_monday,
+              last_diet_date::text AS last_diet_date
+         FROM stats
+        WHERE user_id = $1
+        FOR UPDATE`,
+      [userId]
     );
-    priorSessionsToday = earnedToday.sessionCount;
+    const row = lockResult.rows[0] as StatsRow | undefined;
+    if (!row) {
+      const error = new Error('Stats not initialized');
+      (error as Error & { code: string }).code = 'STATS_NOT_FOUND';
+      throw error;
+    }
+    currentStats = row;
 
+    gains = calculateGains(resolved.exercises);
+
+    const today = localTodayISO();
+    const sessionDateStr = input.date;
+    isToday = sessionDateStr === today;
+
+    // Daily-cap branch is left in place defensively even though the
+    // unique(user_id, date) index makes priorSessionsToday always 0
+    // today — if that constraint is ever relaxed to allow multiple
+    // sessions per day, the cap kicks in without re-reading this code.
+    // Empty totals mirror the no-prior-session case.
+    const earnedToday = { sessionCount: 0, totals: {} as Record<string, number> };
+    const priorSessionsToday = earnedToday.sessionCount;
     for (const [key, gain] of Array.from(gains.entries())) {
       const cap = DAILY_XP_CAPS[key];
       if (cap === undefined) continue;
       const remaining = Math.max(0, cap - (earnedToday.totals[key] ?? 0));
       gain.xp = Math.min(gain.xp, remaining);
-      // Drop fully-capped stats so the response gain entry shows a clean
-      // delta of 0 (computed below from before/after parity) and applyGains
-      // doesn't waste a level-recompute on a zero increment.
       if (gain.xp <= 0) gains.delete(key);
     }
-  }
 
-  const statUpdates = applyGains(currentStats, gains);
-
-  let streak = currentStats.streak;
-  let bestStreak = currentStats.best_streak;
-  let lastSessionDate: string | Date | null = currentStats.last_session_date;
-  let tenacityValue = currentStats.tenacity;
-  let tenacityLevel = currentStats.tenacity_level;
-  let vigorValue = currentStats.vigor;
-  let vigorLevel = currentStats.vigor_level;
-
-  let lastQualifyingWeekMonday:
-    | string
-    | Date
-    | null = currentStats.last_qualifying_week_monday;
-
-  // Lifted out of the `if (isToday)` block so the post-session response
-  // can report the raw amount each pillar gained — even when 0. The
-  // client modal uses these to render `+N XP` badges over each bar.
-  let tenacityGain = 0;
-  let vigorGain = 0;
-
-  if (isToday) {
-    // Routine-target weekly streak. Need to know:
-    //   - the user's target (days/week from onboarding),
-    //   - distinct training days this ISO week (including today),
-    //   - distinct training days the previous ISO week.
-    // The session that's being saved is already in `sessions` (it was
-    // INSERT-ed in createSession a moment earlier), so the count
-    // queries see it.
-    // `today` is a local-day string from `localTodayISO()`. Parse via
-    // explicit components so the resulting Date is at local midnight —
-    // a plain `new Date(today)` would round-trip through UTC and shift
-    // the ISO week boundary by one day at year/week edges in any TZ
-    // behind UTC.
-    const sessionDate = parseLocalDay(today);
-    const thisWeekMonday = isoWeekMonday(sessionDate);
-    const lastWeekMonday = new Date(
-      thisWeekMonday.getTime() - 7 * 86_400_000
+    const statUpdates = applyGains(
+      currentStats as unknown as Record<string, number>,
+      gains
     );
 
-    const [target, sessionsThisWeek, sessionsLastWeek] = await Promise.all([
-      getUserWeeklyTarget(userId),
-      countTrainingDaysInWeek(userId, thisWeekMonday),
-      countTrainingDaysInWeek(userId, lastWeekMonday),
-    ]);
+    streak = currentStats.streak;
+    let bestStreak = currentStats.best_streak;
+    let lastSessionDate: string | Date | null =
+      currentStats.last_session_date ?? null;
+    let tenacityValue = currentStats.tenacity;
+    let tenacityLevel = currentStats.tenacity_level;
+    let vigorValue = currentStats.vigor;
+    let vigorLevel = currentStats.vigor_level;
+    let lastQualifyingWeekMonday: string | Date | null =
+      currentStats.last_qualifying_week_monday ?? null;
 
-    const streakResult = calculateStreak({
-      current: {
-        streak: currentStats.streak,
-        best_streak: currentStats.best_streak,
-        last_session_date: currentStats.last_session_date
-          ? new Date(currentStats.last_session_date)
-          : null,
-        last_qualifying_week_monday: currentStats.last_qualifying_week_monday
-          ? new Date(currentStats.last_qualifying_week_monday)
-          : null,
-      },
-      target,
-      sessionsThisWeek,
-      sessionsLastWeek,
-      sessionDate,
-    });
-    streak = streakResult.streak;
-    bestStreak = streakResult.best_streak;
-    lastSessionDate = streakResult.last_session_date;
-    lastQualifyingWeekMonday =
-      streakResult.last_qualifying_week_monday || null;
-
-    // Tenacity and Vigor are *daily* rewards, not per-session: they
-    // represent showing up today, not the volume of work. Awarding them
-    // on every save would let a user grind 3 sessions to triple-dip the
-    // bonus. Gate on `priorSessionsToday === 0` so only the first save
-    // of the day moves these bars; subsequent sessions that day still
-    // earn fuerza/resistencia/estamina/agilidad up to the daily cap.
-    if (priorSessionsToday === 0) {
-      // Tenacity rewards weekly consistency. Base 10 + a streak bonus
-      // that *starts at half* the cap (+15) and rises 3× per week up to
-      // the +30 cap. So week 1 already gives +18 (10 base + 18 bonus =
-      // 28 XP) instead of the +13 a from-scratch multiplier would give —
-      // a "voto de confianza" so a brand-new user sees real movement on
-      // tenacidad after their first session, not a sliver. The cap is
-      // hit at week 5 (15 + 5×3 = 30) instead of week 10.
-      tenacityGain = 10 + Math.min(30, 15 + streak * 3);
-      const { xp: nextTenacityXp, level: nextTenacityLevel } = applyXpToLevel(
-        currentStats.tenacity_level,
-        currentStats.tenacity + tenacityGain
+    if (isToday) {
+      const sessionDate = parseLocalDay(today);
+      const thisWeekMonday = isoWeekMonday(sessionDate);
+      const lastWeekMonday = new Date(
+        thisWeekMonday.getTime() - 7 * 86_400_000
       );
-      tenacityValue = nextTenacityXp;
-      tenacityLevel = nextTenacityLevel;
 
-      // Vigor: flat 20 per session. The diet reward (+10) lives at
-      // diet log-time (see diet.service.logDietForToday) so the user
-      // gets immediate feedback on the COMPLETAR DIETA tap. Net daily
-      // cap when doing both: 20 + 10 = 30 — training is the heavier
-      // source, eating well alone still moves the bar on rest days.
-      vigorGain = 20;
-      const { xp: nextVigorXp, level: nextVigorLevel } = applyXpToLevel(
-        currentStats.vigor_level,
-        currentStats.vigor + vigorGain
-      );
-      vigorValue = nextVigorXp;
-      vigorLevel = nextVigorLevel;
+      const [target, sessionsThisWeek, sessionsLastWeek] = await Promise.all([
+        getUserWeeklyTarget(userId),
+        countTrainingDaysInWeek(userId, thisWeekMonday),
+        countTrainingDaysInWeek(userId, lastWeekMonday),
+      ]);
+
+      const streakResult = calculateStreak({
+        current: {
+          streak: currentStats.streak,
+          best_streak: currentStats.best_streak,
+          last_session_date: currentStats.last_session_date
+            ? new Date(currentStats.last_session_date)
+            : null,
+          last_qualifying_week_monday: currentStats.last_qualifying_week_monday
+            ? new Date(currentStats.last_qualifying_week_monday)
+            : null,
+        },
+        target,
+        sessionsThisWeek,
+        sessionsLastWeek,
+        sessionDate,
+      });
+      streak = streakResult.streak;
+      bestStreak = streakResult.best_streak;
+      lastSessionDate = streakResult.last_session_date;
+      lastQualifyingWeekMonday =
+        streakResult.last_qualifying_week_monday || null;
+
+      if (priorSessionsToday === 0) {
+        tenacityGain = 10 + Math.min(30, 15 + streak * 3);
+        const { xp: nextTenacityXp, level: nextTenacityLevel } = applyXpToLevel(
+          currentStats.tenacity_level,
+          currentStats.tenacity + tenacityGain
+        );
+        tenacityValue = nextTenacityXp;
+        tenacityLevel = nextTenacityLevel;
+
+        vigorGain = 20;
+        const { xp: nextVigorXp, level: nextVigorLevel } = applyXpToLevel(
+          currentStats.vigor_level,
+          currentStats.vigor + vigorGain
+        );
+        vigorValue = nextVigorXp;
+        vigorLevel = nextVigorLevel;
+      }
     }
+
+    // Apply stats UPDATE inside the same transaction so the lock
+    // guarantees the SELECT we read above is the value we're updating.
+    updatedStats = await statsService.updateStatsInTx(client, userId, {
+      ...statUpdates,
+      tenacity: tenacityValue,
+      tenacity_level: tenacityLevel,
+      vigor: vigorValue,
+      vigor_level: vigorLevel,
+      streak,
+      best_streak: bestStreak,
+      last_session_date: lastSessionDate,
+      last_qualifying_week_monday: lastQualifyingWeekMonday,
+    });
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
   }
 
-  const updatedStats = await statsService.updateStats(userId, {
-    ...statUpdates,
-    tenacity: tenacityValue,
-    tenacity_level: tenacityLevel,
-    vigor: vigorValue,
-    vigor_level: vigorLevel,
-    streak,
-    best_streak: bestStreak,
-    last_session_date: lastSessionDate,
-    last_qualifying_week_monday: lastQualifyingWeekMonday,
-  });
+  // Read the session detail back AFTER commit — the join across
+  // sessions+session_exercises+exercise_sets is heavy and we don't
+  // want to hold locks while building the response. Stats are already
+  // updated and returned by the in-tx update above.
+  const session = await getSessionDetail(userId, sessionId);
+  if (!session) {
+    throw new Error('Failed to read back created session');
+  }
 
   // Evaluate character class progression. Non-critical; never fail the session.
+  const us = updatedStats as Record<string, number>;
   try {
     await characterService.evaluateAfterStatsUpdate(userId, {
-      strength: updatedStats.strength_level,
-      endurance: updatedStats.endurance_level,
-      stamina: updatedStats.stamina_level,
-      agility: updatedStats.agility_level,
-      tenacity: updatedStats.tenacity_level,
-      vigor: updatedStats.vigor_level,
+      strength: us.strength_level,
+      endurance: us.endurance_level,
+      stamina: us.stamina_level,
+      agility: us.agility_level,
+      tenacity: us.tenacity_level,
+      vigor: us.vigor_level,
     });
   } catch (err) {
     logger.warn(
@@ -937,12 +909,12 @@ export const processSession = async (
     ]);
 
     const statLevels = [
-      updatedStats.strength_level,
-      updatedStats.endurance_level,
-      updatedStats.stamina_level,
-      updatedStats.agility_level,
-      updatedStats.tenacity_level,
-      updatedStats.vigor_level,
+      us.strength_level,
+      us.endurance_level,
+      us.stamina_level,
+      us.agility_level,
+      us.tenacity_level,
+      us.vigor_level,
     ];
     const maxStatLevel = Math.max(...statLevels);
 

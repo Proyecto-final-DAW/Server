@@ -62,6 +62,14 @@ function getPool(): Pool {
         process.env.PG_POOL_CONNECTION_MS,
         5_000
       ),
+      // Cap any single query at 10s. Without this, a runaway full
+      // table scan or a query waiting on a row lock holds a
+      // connection forever. With pool max=5 in the default serverless
+      // config, just 5 such queries brick the entire pool — every
+      // other request 5xxs with `connectionTimeoutMillis` exceeded.
+      // 10s is generous (the slowest legit query in the app is the
+      // session-history paginated read, ~50ms on prod data).
+      statement_timeout: parseInt(process.env.PG_STATEMENT_TIMEOUT_MS, 10_000),
     });
   }
 

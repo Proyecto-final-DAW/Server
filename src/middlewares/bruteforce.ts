@@ -77,6 +77,36 @@ export const loginBruteforceProtection = [
   })(),
 ];
 
+/**
+ * Anti-bruteforce middleware for `PUT /profile/me/password`.
+ *
+ * An attacker who has stolen a JWT (XSS, shoulder-surf) can otherwise
+ * grind `currentPassword` guesses at the global limiter rate and take
+ * the account over permanently (change-password rotates `tokens`,
+ * which logs the real owner out everywhere). Keying on the
+ * authenticated user id (not IP) so a coordinated multi-IP attack on
+ * a single account still shares one quota.
+ */
+export const changePasswordBruteforceProtection = rateLimit({
+  windowMs: parseMs(process.env.AUTH_CHANGE_PASSWORD_WINDOW_MS, 15 * 60_000),
+  limit: parsePositiveInt(process.env.AUTH_CHANGE_PASSWORD_MAX, 5),
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Only failed attempts count — a successful rotation shouldn't lock
+  // the user out of further legitimate rotations.
+  skipSuccessfulRequests: true,
+  requestWasSuccessful: (_req: Request, res: Response) => res.statusCode < 400,
+  keyGenerator: (req: Request) => {
+    const userId = (req as Request & { user?: { id: number } }).user?.id;
+    if (typeof userId === 'number') return `user:${userId}`;
+    const ip = req.ip ?? req.socket.remoteAddress ?? '0.0.0.0';
+    return `ip:${ipKeyGenerator(ip)}`;
+  },
+  message: {
+    message: 'Demasiados intentos de cambio de contrasena. Vuelve mas tarde.',
+  },
+});
+
 export const registerBruteforceProtection = [
   (() => {
     return rateLimit({

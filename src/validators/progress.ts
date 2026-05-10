@@ -21,11 +21,22 @@ export const registerWeightSchema = z
       .min(20, 'Weight must be a number between 20 and 400 kg')
       .max(400, 'Weight must be a number between 20 and 400 kg')
       .finite('weight must be finite'),
+    // Same future-date guard as the session schema. A weight log on a
+    // future date corrupts WeightProgressChart's x-axis and is never a
+    // legitimate user action. Backdating remains allowed.
     date: z
       .string()
       .regex(
         /^\d{4}-\d{2}-\d{2}(T.+)?$/,
         'date must be YYYY-MM-DD or an ISO timestamp'
+      )
+      .refine(
+        (v) => {
+          const d = new Date(v);
+          if (Number.isNaN(d.getTime())) return false;
+          return d.getTime() <= Date.now() + 24 * 60 * 60 * 1000;
+        },
+        { message: 'date cannot be in the future' }
       )
       .optional(),
   })

@@ -237,6 +237,39 @@ const UserController = {
       return sendServerError(res, err, 'UserController.getStatsForCurrentUser');
     }
   },
+
+  /**
+   * DELETE /users/me — GDPR-compliant account deletion. The `users`
+   * row has `onDelete: Cascade` on every owned table (sessions,
+   * routines, stats, weight_logs, user_class_state, user_milestones),
+   * so removing the row also cleans up everything the user produced.
+   * Audit log entries are *not* cascaded because the `actor_user_id` /
+   * `target_user_id` columns are SET NULL — keeping the trail intact
+   * for security review while honouring the deletion request.
+   */
+  async deleteMe(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: 'Not authorized' });
+      }
+
+      await safeWriteAuditEvent(req, {
+        action: 'ACCOUNT_DELETED',
+        actorUserId: userId,
+        targetUserId: userId,
+        requestId: (req as unknown as { id?: string }).id ?? null,
+        ip: req.ip,
+        userAgent: req.headers['user-agent'] ?? null,
+      });
+
+      await userService.deleteUser(userId);
+
+      return res.status(200).json({ message: 'Account deleted' });
+    } catch (err) {
+      return sendServerError(res, err, 'UserController.deleteMe');
+    }
+  },
 };
 
 export default UserController;

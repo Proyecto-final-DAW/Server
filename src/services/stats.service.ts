@@ -63,6 +63,40 @@ const WRITABLE_STAT_COLUMNS = new Set<string>([
   'last_diet_date',
 ]);
 
+/**
+ * Internal helper. Same UPDATE as `updateStats` but runs against a
+ * caller-managed `pg` client — used by `processSession` so the stats
+ * write happens in the same transaction as the SELECT FOR UPDATE
+ * that locked the row, closing the lost-update race two concurrent
+ * saves used to expose.
+ */
+export const updateStatsInTx = async (
+  client: import('pg').PoolClient,
+  userId: number,
+  data: Record<string, unknown>
+) => {
+  const allowedEntries = Object.entries(data).filter(
+    ([key]) => WRITABLE_STAT_COLUMNS.has(key)
+  );
+  if (allowedEntries.length === 0) {
+    const fallback = await client.query(
+      `SELECT * FROM stats WHERE user_id = $1`,
+      [userId]
+    );
+    return fallback.rows[0];
+  }
+  const fields = allowedEntries.map(([k]) => k);
+  const values = allowedEntries.map(([, v]) => v);
+
+  const setClause = fields.map((field, i) => `${field} = $${i + 1}`).join(', ');
+
+  const result = await client.query(
+    `UPDATE stats SET ${setClause}, updated_at = NOW() WHERE user_id = $${fields.length + 1} RETURNING *`,
+    [...values, userId]
+  );
+  return result.rows[0];
+};
+
 export const updateStats = async (
   userId: number,
   data: Record<string, unknown>
