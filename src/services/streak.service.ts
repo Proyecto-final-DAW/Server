@@ -208,14 +208,12 @@ export const calculateStreak = (inputs: StreakInputs): StreakResult => {
  * save) and made the dashboard show a higher number than the profile.
  * Trust the stored value here; let the save path keep it current.
  *
- * `target` and `_sessionsThisWeek` are kept in the signature so call
- * sites that already pass them don't need to be touched, even though
- * the simplified calculation no longer reads them.
+ * The earlier signature carried `target` and `sessionsThisWeek`
+ * placeholders kept "for compatibility" — both call sites have been
+ * updated, so they're gone now.
  */
 export const liveStreak = (
   state: StreakState,
-  _target: number,
-  _sessionsThisWeek: number,
   now: Date = new Date()
 ): number => {
   if (state.streak <= 0 || !state.last_qualifying_week_monday) return 0;
@@ -271,7 +269,7 @@ export const calculateStreakStatus = (
   sessionsThisWeek: number,
   now: Date = new Date()
 ): StreakStatus => {
-  const live = liveStreak(state, target, sessionsThisWeek, now);
+  const live = liveStreak(state, now);
   const sessionsRemaining = Math.max(0, target - sessionsThisWeek);
 
   const monday = isoWeekMonday(now);

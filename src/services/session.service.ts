@@ -14,7 +14,17 @@ import { parseDaysPerWeekTarget } from '../utils/weeklyTarget';
 import * as characterService from './character.service';
 import { getExerciseMetaById, getExerciseTypeById } from './exercise.service';
 import * as milestoneService from './milestone.service';
-import { applyGains, applyXpToLevel, calculateGains } from './progression.service';
+import {
+  applyGains,
+  applyXpToLevel,
+  calculateGains,
+  DAILY_XP_CAPS,
+  TENACITY_BASE_PER_SESSION,
+  TENACITY_STREAK_BONUS_BASE,
+  TENACITY_STREAK_BONUS_CAP,
+  TENACITY_STREAK_BONUS_STEP,
+  VIGOR_PER_SESSION,
+} from './progression.service';
 import * as statsService from './stats.service';
 import { calculateStreak, isoWeekMonday } from './streak.service';
 
@@ -664,13 +674,10 @@ const getSetsForExercises = async (
  * making "grind sessions" the optimal play and a single solid workout
  * feel underweighted. Daily caps make session count irrelevant: it's the
  * total work that matters.
+ *
+ * (Constants live in progression.service so all XP knobs are in one
+ * place — see DAILY_XP_CAPS, TENACITY_*, VIGOR_* there.)
  */
-const DAILY_XP_CAPS: Record<string, number> = {
-  strength: 60,
-  endurance: 40,
-  stamina: 50,
-  agility: 30,
-};
 
 // `sumPriorGainsForDate` was the read-back of "what did the user
 // already earn today" so the daily-cap branch could subtract it. With
@@ -834,7 +841,12 @@ export const processSession = async (
         streakResult.last_qualifying_week_monday || null;
 
       if (priorSessionsToday === 0) {
-        tenacityGain = 10 + Math.min(30, 15 + streak * 3);
+        tenacityGain =
+          TENACITY_BASE_PER_SESSION +
+          Math.min(
+            TENACITY_STREAK_BONUS_CAP,
+            TENACITY_STREAK_BONUS_BASE + streak * TENACITY_STREAK_BONUS_STEP
+          );
         const { xp: nextTenacityXp, level: nextTenacityLevel } = applyXpToLevel(
           currentStats.tenacity_level,
           currentStats.tenacity + tenacityGain
@@ -842,7 +854,7 @@ export const processSession = async (
         tenacityValue = nextTenacityXp;
         tenacityLevel = nextTenacityLevel;
 
-        vigorGain = 20;
+        vigorGain = VIGOR_PER_SESSION;
         const { xp: nextVigorXp, level: nextVigorLevel } = applyXpToLevel(
           currentStats.vigor_level,
           currentStats.vigor + vigorGain

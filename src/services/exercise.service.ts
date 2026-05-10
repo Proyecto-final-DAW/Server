@@ -140,20 +140,41 @@ const exerciseTypeById = new Map<string, ExerciseType>(
 export const getExerciseTypeById = (apiId: string): ExerciseType =>
   exerciseTypeById.get(apiId) ?? 'strength';
 
-const matchesSearch = (exercise: Exercise, search: string): boolean =>
-  exercise.name.toLowerCase().includes(search.toLowerCase());
-
-const matchesMuscle = (exercise: Exercise, muscle: string): boolean => {
-  const target = (MUSCLE_ALIASES[muscle.toLowerCase()] ?? muscle).toLowerCase();
-  return exercise.target.toLowerCase() === target;
+// Precompute lowercase fields once at module load. The search filter
+// runs on every keystroke (debounced client-side) and walks all 873
+// catalog entries; lowercasing inside the loop on every comparison
+// is pure waste — the lower-cased values never change. A 873-entry
+// allocation at boot saves N×873 toLowerCase calls per request.
+type IndexedExercise = Exercise & {
+  _nameLower: string;
+  _targetLower: string;
 };
+const indexedDataset: IndexedExercise[] = dataset.map((e) => ({
+  ...e,
+  _nameLower: e.name.toLowerCase(),
+  _targetLower: e.target.toLowerCase(),
+}));
 
-const filterExercises = (search?: string, muscle?: string): Exercise[] =>
-  dataset.filter(
+// Hard cap on the search query length. Without it a 10kB search
+// string still ran toLowerCase + a substring scan on every catalog
+// entry; the controller already caps `limit` so this is the last
+// untyped surface a client could weaponise.
+const MAX_SEARCH_LENGTH = 100;
+
+const filterExercises = (search?: string, muscle?: string): Exercise[] => {
+  const searchLower =
+    search && search.length > 0
+      ? search.slice(0, MAX_SEARCH_LENGTH).toLowerCase()
+      : null;
+  const targetLower = muscle
+    ? (MUSCLE_ALIASES[muscle.toLowerCase()] ?? muscle).toLowerCase()
+    : null;
+  return indexedDataset.filter(
     (exercise) =>
-      (!search || matchesSearch(exercise, search)) &&
-      (!muscle || matchesMuscle(exercise, muscle))
+      (!searchLower || exercise._nameLower.includes(searchLower)) &&
+      (!targetLower || exercise._targetLower === targetLower)
   );
+};
 
 // Synchronous because the dataset lives in memory — no I/O. Kept as a free
 // function (not async) so the controller's call site is honest about there

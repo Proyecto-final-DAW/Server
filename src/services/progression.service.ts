@@ -49,6 +49,39 @@ const INTENSITY_MULTIPLIER: Record<CardioIntensity, number> = {
 };
 
 /**
+ * Daily / per-event XP rewards that live OUTSIDE the per-session
+ * formula. Session save grants `TENACITY_BASE` + a streak bonus
+ * (capped) and a flat `VIGOR_PER_SESSION`; the diet log grants a
+ * separate `VIGOR_PER_DIET_LOG`. Net daily ceiling per pillar (when
+ * doing both) is intentional:
+ *   tenacity = TENACITY_BASE + min(TENACITY_STREAK_CAP, base + streak*step)
+ *   vigor    = VIGOR_PER_SESSION + VIGOR_PER_DIET_LOG ≈ 30
+ *
+ * Centralised here so session.service / diet.service / docs all
+ * read from one place — used to be three duplicates that risked
+ * drifting apart.
+ */
+export const TENACITY_BASE_PER_SESSION = 10;
+export const TENACITY_STREAK_BONUS_BASE = 15;
+export const TENACITY_STREAK_BONUS_STEP = 3;
+export const TENACITY_STREAK_BONUS_CAP = 30;
+export const VIGOR_PER_SESSION = 20;
+export const VIGOR_PER_DIET_LOG = 10;
+
+/**
+ * Per-stat cap on the daily XP from training-derived pillars. Today
+ * the unique(user_id, date) index makes the daily-cap branch a no-op
+ * (priorSessionsToday is always 0), but the constants are kept so
+ * the cap shape survives any future relaxation of that constraint.
+ */
+export const DAILY_XP_CAPS: Record<string, number> = {
+  strength: 80,
+  endurance: 40,
+  stamina: 50,
+  agility: 30,
+};
+
+/**
  * Hard ceiling for individual stat levels. Matches the game convention
  * where T6 LEYENDA requires `all stats >= 99` — going beyond 99 has no
  * narrative meaning, so we stop the level counter there and discard

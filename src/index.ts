@@ -39,9 +39,23 @@ async function startServer() {
     process.exit(1);
   }
   if (process.env.LOCAL_DEV_AUTH_BYPASS === '1') {
+    // Refuse to boot if LOCAL_DEV_USER_ID isn't an explicit positive
+    // integer. The middleware falls back to '1' when the env is
+    // empty, which silently logs every request as user 1 — fine
+    // when user 1 is the developer, dangerous when it's seed data
+    // or an accidental admin. Force the operator to opt in.
+    const rawDevId = process.env.LOCAL_DEV_USER_ID ?? '';
+    const devId = Number.parseInt(rawDevId, 10);
+    if (!rawDevId || !Number.isInteger(devId) || devId <= 0) {
+      console.error(
+        '❌ LOCAL_DEV_AUTH_BYPASS=1 requires LOCAL_DEV_USER_ID set to ' +
+          `a positive integer. Got '${rawDevId}'. Refusing to start.`
+      );
+      process.exit(1);
+    }
     console.warn(
-      '⚠ LOCAL_DEV_AUTH_BYPASS is ENABLED. Every unauthenticated ' +
-        `request will be logged in as user ${process.env.LOCAL_DEV_USER_ID ?? '1'}.`
+      `⚠ LOCAL_DEV_AUTH_BYPASS is ENABLED. Every unauthenticated ` +
+        `request will be logged in as user ${devId}.`
     );
   }
 

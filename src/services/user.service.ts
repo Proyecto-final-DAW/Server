@@ -211,12 +211,18 @@ export const deleteUser = async (userId: number): Promise<void> => {
   await pool.query('DELETE FROM users WHERE id = $1', [userId]);
 };
 
-export const removeToken = async (userId: number, token: string) => {
-  const result = await pool.query(
-    'UPDATE users SET tokens = array_remove(tokens, $1) WHERE id = $2 RETURNING *',
+export const removeToken = async (
+  userId: number,
+  token: string
+): Promise<{ id: number } | null> => {
+  // Only the existence of an updated row is needed (logout uses it as
+  // a truthiness check). Returning `*` shipped the entire user row
+  // back through the controller; trimming to `id` cuts the wire size.
+  const result = await pool.query<{ id: number }>(
+    'UPDATE users SET tokens = array_remove(tokens, $1) WHERE id = $2 RETURNING id',
     [token, userId]
   );
-  return normalizeUserRow(result.rows[0]);
+  return result.rows[0] ?? null;
 };
 
 export const hasToken = async (

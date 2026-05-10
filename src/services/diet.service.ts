@@ -1,7 +1,10 @@
 import pool from '../db/pool';
 import { resolveMacroInputs } from '../utils/macroProfile';
 import { calculateCalories, MacroTargets } from './macros.service';
-import { applyXpToLevel } from './progression.service';
+import {
+  applyXpToLevel,
+  VIGOR_PER_DIET_LOG,
+} from './progression.service';
 import { normalizeUserRow } from './user.service';
 
 /**
@@ -10,12 +13,10 @@ import { normalizeUserRow } from './user.service';
  * immediate feedback on the button press, and so eating well counts
  * even on rest days.
  *
- * Training is still the heavier vigor source (+20 in session.service),
- * so a 30-cap day requires both. A diet-only week (no sessions) caps
- * at 70 XP, slow but visible — exactly what "vives bien sin entrenar"
- * should feel like.
+ * Constant lives in progression.service so all XP knobs are colocated;
+ * re-aliased here for readable use within the module.
  */
-const DIET_VIGOR_GAIN = 10;
+const DIET_VIGOR_GAIN = VIGOR_PER_DIET_LOG;
 
 function throwCoded(message: string, code: string): never {
   const err = new Error(message);

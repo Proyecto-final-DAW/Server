@@ -70,8 +70,6 @@ export const getCards = async (userId: number): Promise<CardsResponse> => {
             ? new Date(stats.last_qualifying_week_monday)
             : null,
         },
-        target,
-        sessionsThisWeek,
         now
       )
     : 0;

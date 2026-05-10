@@ -42,11 +42,16 @@ const DietController = {
       if (!userId) {
         return res.status(401).json({ message: 'Not authorized' });
       }
+      // Single query — `isDietLoggedToday` previously re-ran
+      // `getDietState`, doubling the round-trip on every dashboard
+      // load. Comparing the date here is equivalent (same column,
+      // same day-string).
       const state = await dietService.getDietState(userId);
       if (!state) {
         return res.status(404).json({ message: 'Stats not found' });
       }
-      const loggedToday = await dietService.isDietLoggedToday(userId);
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const loggedToday = state.last_diet_date === todayStr;
       return res.status(200).json({
         diet_streak: state.diet_streak,
         best_diet_streak: state.best_diet_streak,
