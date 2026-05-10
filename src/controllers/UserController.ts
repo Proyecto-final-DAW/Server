@@ -127,7 +127,17 @@ const UserController = {
             ),
           },
         });
-        return res.status(401).json({ message: 'Invalid email or password' });
+        // Personalized Spanish copy + a stable `code` so the client
+        // can branch on the kind of error (display vs redirect, etc).
+        // Single message for both "no such email" and "wrong password"
+        // so account enumeration via login is impossible — the
+        // surface for that is the register endpoint, which has its
+        // own audited 409 path.
+        return res.status(401).json({
+          code: 'INVALID_CREDENTIALS',
+          message:
+            'Email o contrasena incorrectos. Revisa los datos y vuelve a intentarlo.',
+        });
       }
       await safeWriteAuditEvent(req, {
         action: 'AUTH_LOGIN_FAILED',

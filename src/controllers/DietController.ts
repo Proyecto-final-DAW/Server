@@ -44,13 +44,20 @@ const DietController = {
       }
       // Single query — `isDietLoggedToday` previously re-ran
       // `getDietState`, doubling the round-trip on every dashboard
-      // load. Comparing the date here is equivalent (same column,
-      // same day-string).
+      // load. Build the comparison string with server-LOCAL date
+      // components (matching the `localTodayISO` helper that the
+      // write path used to store `last_diet_date`). A bare
+      // `toISOString().slice(0,10)` would diverge in any TZ behind
+      // UTC and falsely report `logged_today=false` after a session
+      // logged late evening local.
       const state = await dietService.getDietState(userId);
       if (!state) {
         return res.status(404).json({ message: 'Stats not found' });
       }
-      const todayStr = new Date().toISOString().slice(0, 10);
+      const now = new Date();
+      const todayStr = `${now.getFullYear()}-${String(
+        now.getMonth() + 1
+      ).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       const loggedToday = state.last_diet_date === todayStr;
       return res.status(200).json({
         diet_streak: state.diet_streak,

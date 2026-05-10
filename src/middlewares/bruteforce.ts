@@ -54,7 +54,11 @@ export const loginBruteforceProtection = [
       skipSuccessfulRequests: true,
       requestWasSuccessful: (_req: Request, res: Response) =>
         res.statusCode < 400,
-      message: { message: 'Too many login attempts. Try again later.' },
+      message: {
+        code: 'TOO_MANY_LOGIN_ATTEMPTS',
+        message:
+          'Demasiados intentos desde tu red. Espera unos minutos y vuelve a intentarlo.',
+      },
     });
   })(),
   (() => {
@@ -72,7 +76,11 @@ export const loginBruteforceProtection = [
         const ip = req.ip ?? req.socket.remoteAddress ?? '0.0.0.0';
         return `ip:${ipKeyGenerator(ip)}`;
       },
-      message: { message: 'Too many login attempts. Try again later.' },
+      message: {
+        code: 'TOO_MANY_LOGIN_ATTEMPTS',
+        message:
+          'Demasiados intentos para esta cuenta. Espera unos minutos y vuelve a intentarlo.',
+      },
     });
   })(),
 ];
@@ -114,7 +122,11 @@ export const registerBruteforceProtection = [
       limit: parsePositiveInt(process.env.AUTH_REGISTER_MAX_PER_IP, 10),
       standardHeaders: true,
       legacyHeaders: false,
-      message: { message: 'Too many registration attempts. Try again later.' },
+      message: {
+        code: 'TOO_MANY_REGISTER_ATTEMPTS',
+        message:
+          'Demasiados intentos de registro. Espera unos minutos y vuelve a intentarlo.',
+      },
     });
   })(),
   (() => {
@@ -129,7 +141,11 @@ export const registerBruteforceProtection = [
         const ip = req.ip ?? req.socket.remoteAddress ?? '0.0.0.0';
         return `ip:${ipKeyGenerator(ip)}`;
       },
-      message: { message: 'Too many registration attempts. Try again later.' },
+      message: {
+        code: 'TOO_MANY_REGISTER_ATTEMPTS',
+        message:
+          'Demasiados intentos de registro. Espera unos minutos y vuelve a intentarlo.',
+      },
     });
   })(),
 ];
