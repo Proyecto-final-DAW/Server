@@ -11,11 +11,17 @@
 -- `ON CONFLICT (name) DO NOTHING` to be safely re-runnable on
 -- already-seeded environments.
 --
--- If duplicate rows already exist (re-applied seed), this migration
--- aborts. Cleanup query for that case:
---
---   DELETE FROM milestones a USING milestones b
---   WHERE a.id > b.id AND a.name = b.name;
+-- Self-healing dedupe BEFORE the constraint, mirroring the sessions
+-- migration: any environment that re-applied a seed already has
+-- duplicates and would otherwise fail with 23505. Keep the earliest
+-- row per name; user_milestones FK references stay intact because
+-- existing user_milestones already point to the kept (lowest) id —
+-- the duplicate rows the user couldn't have unlocked yet.
+DELETE FROM "public"."milestones" m
+ USING "public"."milestones" earliest
+ WHERE m.name = earliest.name
+   AND m.id > earliest.id;
+
 ALTER TABLE "public"."milestones"
   ADD CONSTRAINT "milestones_name_key" UNIQUE (name);
 
