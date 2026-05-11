@@ -111,7 +111,7 @@ export const changePasswordBruteforceProtection = rateLimit({
     return `ip:${ipKeyGenerator(ip)}`;
   },
   message: {
-    message: 'Demasiados intentos de cambio de contrasena. Vuelve mas tarde.',
+    message: 'Demasiados intentos de cambio de contraseña. Vuelve mas tarde.',
   },
 });
 

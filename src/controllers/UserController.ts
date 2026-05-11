@@ -136,7 +136,7 @@ const UserController = {
         return res.status(401).json({
           code: 'INVALID_CREDENTIALS',
           message:
-            'Email o contrasena incorrectos. Revisa los datos y vuelve a intentarlo.',
+            'Email o contraseña incorrectos. Revisa los datos y vuelve a intentarlo.',
         });
       }
       await safeWriteAuditEvent(req, {
