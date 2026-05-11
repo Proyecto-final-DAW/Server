@@ -1,14 +1,12 @@
 import pool from '../db/pool';
 import type { UnlockedMilestone } from '../models/Milestone';
 import type {
-  CardioIntensity,
-  CreateSessionExerciseInput,
   CreateSessionInput,
   ExerciseSet,
-  ExerciseType,
   Session,
   SessionExercise,
 } from '../models/Session';
+import { localTodayISO, parseLocalDay } from '../utils/date';
 import { logger } from '../utils/logger';
 import { parseDaysPerWeekTarget } from '../utils/weeklyTarget';
 import * as characterService from './character.service';
@@ -168,51 +166,6 @@ const applyBodyweightLoad = (
   };
 };
 
-const toISODate = (date: Date | string): string => {
-  const d = date instanceof Date ? date : new Date(date);
-  return d.toISOString().split('T')[0];
-};
-
-/**
- * Local-timezone YYYY-MM-DD for comparing against the date the client sent.
- *
- * The client builds `todayISO()` from `getFullYear/getMonth/getDate` (local
- * time), so the server has to match that — using `toISOString()` here would
- * silently flip the date for any user in a TZ ahead of UTC between local
- * midnight and UTC midnight (e.g. 00:00–02:00 in CEST), making `isToday`
- * false and skipping the tenacity / vigor / streak updates for half the
- * "late night" sessions. Local-formatted comparison is correct as long as
- * server TZ matches the user's, which holds in dev (single-machine) and is
- * easy to enforce in prod by pinning TZ to UTC and having the client also
- * send UTC.
- */
-const localTodayISO = (): string => {
-  const d = new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-/**
- * Parses a `YYYY-MM-DD` string back into a Date at *local* midnight,
- * mirroring how `localTodayISO()` produced it. `new Date(yyyy-mm-dd)`
- * would parse the same string as UTC midnight, which then leaks into
- * `isoWeekMonday()` via the local-time getters and shifts the ISO
- * week one day back at year/week boundaries in any TZ behind UTC.
- * Building the Date from explicit components keeps the local-day
- * stable end-to-end.
- */
-const parseLocalDay = (yyyyMmDd: string): Date => {
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(yyyyMmDd);
-  if (!match) return new Date(yyyyMmDd);
-  return new Date(
-    Number.parseInt(match[1], 10),
-    Number.parseInt(match[2], 10) - 1,
-    Number.parseInt(match[3], 10)
-  );
-};
-
 const countUserSessions = async (userId: number): Promise<number> => {
   const result = await pool.query(
     'SELECT COUNT(*)::int AS total FROM sessions WHERE user_id = $1',
@@ -302,12 +255,26 @@ interface WeeklyMetricsRow {
 export const getWeeklySummary = async (
   userId: number
 ): Promise<WeeklySummary> => {
+  // Compute week bounds in JS so they share `isoWeekMonday`'s local-time
+  // semantics. `date_trunc('week', CURRENT_DATE)` would resolve against
+  // the pool's UTC session and disagreed with the client's perceived
+  // "this week" any time the local week had advanced past UTC's (e.g.
+  // Mon 00:30 CEST → still Sun in UTC → bounds bucketed today's session
+  // into "previous" instead of "current").
+  const now = new Date();
+  const currentStart = isoWeekMonday(now);
+  const previousStart = new Date(currentStart.getTime() - 7 * 86_400_000);
+  const nextStart = new Date(currentStart.getTime() + 7 * 86_400_000);
+  const currentStr = currentStart.toISOString().slice(0, 10);
+  const previousStr = previousStart.toISOString().slice(0, 10);
+  const nextStr = nextStart.toISOString().slice(0, 10);
+
   const result = await pool.query<WeeklyMetricsRow>(
     `WITH bounds AS (
        SELECT
-         date_trunc('week', CURRENT_DATE)::date AS current_start,
-         (date_trunc('week', CURRENT_DATE) - INTERVAL '1 week')::date AS previous_start,
-         (date_trunc('week', CURRENT_DATE) + INTERVAL '1 week')::date AS next_start
+         $2::date AS current_start,
+         $3::date AS previous_start,
+         $4::date AS next_start
      ),
      session_metrics AS (
        SELECT
@@ -339,7 +306,7 @@ export const getWeeklySummary = async (
        COALESCE(SUM(sm.volume), 0)::int AS total_volume
      FROM session_metrics sm, bounds b
      GROUP BY bucket`,
-    [userId]
+    [userId, currentStr, previousStr, nextStr]
   );
 
   const summary: WeeklySummary = {
@@ -524,7 +491,8 @@ export const getSessionDetail = async (
 
   const exercises: SessionExercise[] = exerciseRows.map((e) => ({
     ...e,
-    distance_km: e.distance_km_text !== null ? parseFloat(e.distance_km_text) : null,
+    distance_km:
+      e.distance_km_text !== null ? parseFloat(e.distance_km_text) : null,
     sets: setsByExercise.get(e.id) ?? [],
   }));
 
@@ -779,7 +747,10 @@ export const processSession = async (
     // today — if that constraint is ever relaxed to allow multiple
     // sessions per day, the cap kicks in without re-reading this code.
     // Empty totals mirror the no-prior-session case.
-    const earnedToday = { sessionCount: 0, totals: {} as Record<string, number> };
+    const earnedToday = {
+      sessionCount: 0,
+      totals: {} as Record<string, number>,
+    };
     const priorSessionsToday = earnedToday.sessionCount;
     for (const [key, gain] of Array.from(gains.entries())) {
       const cap = DAILY_XP_CAPS[key];
@@ -973,7 +944,11 @@ export const processSession = async (
     streak,
     isToday,
     perStat: {
-      strength: buildEntry('strength', 'strength_level', rawGainsByKey.strength),
+      strength: buildEntry(
+        'strength',
+        'strength_level',
+        rawGainsByKey.strength
+      ),
       endurance: buildEntry(
         'endurance',
         'endurance_level',
@@ -981,7 +956,11 @@ export const processSession = async (
       ),
       stamina: buildEntry('stamina', 'stamina_level', rawGainsByKey.stamina),
       agility: buildEntry('agility', 'agility_level', rawGainsByKey.agility),
-      tenacity: buildEntry('tenacity', 'tenacity_level', rawGainsByKey.tenacity),
+      tenacity: buildEntry(
+        'tenacity',
+        'tenacity_level',
+        rawGainsByKey.tenacity
+      ),
       vigor: buildEntry('vigor', 'vigor_level', rawGainsByKey.vigor),
     },
   };

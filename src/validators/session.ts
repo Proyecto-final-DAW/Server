@@ -69,7 +69,9 @@ const exerciseSchema = z
     // Cap at 50 sets/exercise — well above any realistic workout (a
     // German Volume Training session is 10×10 = 100 sets total across
     // an entire workout, not per exercise).
-    sets: z.array(setSchema).max(50, 'sets array must contain at most 50 entries'),
+    sets: z
+      .array(setSchema)
+      .max(50, 'sets array must contain at most 50 entries'),
     /** Cardio metadata — present only on post-workout cardio entries. */
     duration_minutes: z
       .number()

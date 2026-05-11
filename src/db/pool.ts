@@ -71,6 +71,32 @@ function getPool(): Pool {
       // session-history paginated read, ~50ms on prod data).
       statement_timeout: parseInt(process.env.PG_STATEMENT_TIMEOUT_MS, 10_000),
     });
+
+    // Pin every new connection's session timezone to UTC.
+    //
+    // Historic note: this used to compensate for `cards.service` and
+    // `getWeeklySummary` deriving week bounds via
+    // `date_trunc('week', CURRENT_DATE)` and `streak.service.isoWeekMonday`
+    // reading UTC getters off local-built Dates — pinning UTC kept those
+    // two implicit conventions agreeing with each other. They've since
+    // been refactored to compute bounds in JS (with local-time getters,
+    // matching `localTodayISO()` and the YYYY-MM-DD strings the client
+    // emits) and pass them to SQL as parameters, so the codebase no
+    // longer depends on session TZ.
+    //
+    // The pin stays as a defensive default: any new query that reaches
+    // for `CURRENT_DATE` / `NOW()` still gets a deterministic answer
+    // regardless of whether the deploy host's `TZ` env is set, and the
+    // node `pg` client serialises queries on a single connection so the
+    // `SET TIME ZONE 'UTC'` lands before the first application query.
+    poolInstance.on('connect', (client) => {
+      // No-await fire-and-forget: a fresh connection without TZ set is
+      // still functional, just inconsistent. The next query on this
+      // client may run before SET completes, but `pg` serialises
+      // queries on a single client so the SET will land before any
+      // application query reads timezone-sensitive functions.
+      void client.query("SET TIME ZONE 'UTC'").catch(() => undefined);
+    });
   }
 
   return poolInstance;

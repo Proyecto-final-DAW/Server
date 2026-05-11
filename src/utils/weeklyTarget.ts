@@ -2,19 +2,18 @@
  * Resolves the user's weekly training target from the bucketed
  * `days_per_week` value stored on the user (onboarding answer).
  *
- * Buckets are ranges. For the closed ranges we take the **upper
- * bound** (the ambitious end) — someone who picked "2-3 dias" is
- * mentally aiming at 3, not 2; showing "0/2 esta semana" after
- * picking "2-3" feels off ("I asked for 3, where did 2 come from?").
+ * Buckets are ranges. We take the **lower bound** of each range so
+ * the target reads as "the minimum to keep your streak alive". A
+ * user who picked "4-5" can hit 4 sessions and feel safe — the upper
+ * bound (5) framed the same input as a slightly-out-of-reach goal
+ * and undermined the racha grace mechanic. The lower bound also
+ * matches the user's mental model: they marked the day count they
+ * are *willing to commit to*, not the one they aspire to.
  *
- * The asymmetry to flag: `6+` is open-ended, so there is no defined
- * upper bound to take. We clamp it to 6 — the only finite anchor
- * available — even though that breaks the "ambitious end" rule. In
- * practice this is fine: 6 is the highest weekly target the streak
- * system needs to support (a 7-day streak target would mean "lift
- * every single day" which the app actively recommends against), and
- * a `6+` user already proved willingness to hit 6, which the streak
- * recognises.
+ * `6+` is open-ended; we keep it at 6 because that is both the lower
+ * bound of the bucket and the practical ceiling the streak supports
+ * (a 7-day target effectively means "lift every single day", which
+ * the app advises against).
  *
  * Falls back to 1 (the loosest possible target) when the field is
  * missing — the streak then degrades to "any session per week"
@@ -27,11 +26,10 @@ export const parseDaysPerWeekTarget = (
 
   switch (daysPerWeek) {
     case '2-3':
-      return 3;
+      return 2;
     case '4-5':
-      return 5;
+      return 4;
     case '6+':
-      // See doc comment above — clamped to 6 by design, not by bug.
       return 6;
     default:
       return 1;

@@ -1,7 +1,4 @@
-import {
-  CardioIntensity,
-  CreateSessionExerciseInput,
-} from '../models/Session';
+import { CardioIntensity, CreateSessionExerciseInput } from '../models/Session';
 
 /**
  * Stat sourcing (rebalanced):

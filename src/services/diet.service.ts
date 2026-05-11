@@ -1,8 +1,10 @@
 import pool from '../db/pool';
+import { localTodayISO } from '../utils/date';
 import { resolveMacroInputs } from '../utils/macroProfile';
 import { calculateCalories, MacroTargets } from './macros.service';
 import {
   applyXpToLevel,
+  MAX_STAT_LEVEL,
   VIGOR_PER_DIET_LOG,
 } from './progression.service';
 import { normalizeUserRow } from './user.service';
@@ -36,60 +38,62 @@ function throwCoded(message: string, code: string): never {
  * or is missing any macro input.
  */
 export async function getCurrentMacros(userId: number): Promise<MacroTargets> {
-  // `birth_date` (not `age`) is what resolveMacroInputs reads to compute
-  // the Mifflin–St Jeor age input — selecting only `age` made every diet
-  // request 404 with ONBOARDING_INCOMPLETE because birth_date came back
-  // as undefined.
-  const result = await pool.query(
-    `SELECT onboarding_completed, weight, height, birth_date, sex, activity_level, goals,
-            daily_calories, protein_grams, fat_grams, carb_grams
-       FROM users WHERE id = $1`,
-    [userId]
-  );
+  // The whole read+drift-check+write needs to happen under one
+  // SELECT FOR UPDATE so a concurrent PUT /profile/me { weight: … }
+  // can't race with us. The earlier version read `users` from the
+  // pool *outside* the transaction, computed `drifted`, and only then
+  // grabbed the lock — which meant: profile-update commits new weight
+  // → we re-enter and write macros derived from the OLD weight,
+  // clobbering what the profile request just persisted. Now the read
+  // happens INSIDE the transaction so the lock guarantees the inputs
+  // are the same data we'll write back against.
+  //
+  // `birth_date` (not `age`) is what resolveMacroInputs reads to
+  // compute the Mifflin–St Jeor age input.
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
 
-  const rawUser = result.rows[0];
-  if (!rawUser) {
-    throwCoded('USER_NOT_FOUND', 'USER_NOT_FOUND');
-  }
+    const result = await client.query(
+      `SELECT onboarding_completed, weight, height, birth_date, sex, activity_level, goals,
+              daily_calories, protein_grams, fat_grams, carb_grams
+         FROM users WHERE id = $1
+         FOR UPDATE`,
+      [userId]
+    );
 
-  // Normalize Postgres enum-array columns (goals, injuries, equipment) into
-  // JS arrays. Without this, `Array.isArray(user.goals)` in resolveMacroInputs
-  // would fail and every diet request would 404 with ONBOARDING_INCOMPLETE.
-  const user = normalizeUserRow(rawUser);
+    const rawUser = result.rows[0];
+    if (!rawUser) {
+      throwCoded('USER_NOT_FOUND', 'USER_NOT_FOUND');
+    }
 
-  const inputs = user.onboarding_completed ? resolveMacroInputs(user) : null;
-  if (!inputs) {
-    throwCoded('ONBOARDING_INCOMPLETE', 'ONBOARDING_INCOMPLETE');
-  }
+    // Normalize Postgres enum-array columns (goals, injuries, equipment)
+    // into JS arrays. Without this, `Array.isArray(user.goals)` in
+    // resolveMacroInputs would fail and every diet request would 404
+    // with ONBOARDING_INCOMPLETE.
+    const user = normalizeUserRow(rawUser);
 
-  const computed = calculateCalories(
-    inputs.weightKg,
-    inputs.heightCm,
-    inputs.age,
-    inputs.sex,
-    inputs.activityFactor,
-    inputs.goal
-  );
+    const inputs = user.onboarding_completed ? resolveMacroInputs(user) : null;
+    if (!inputs) {
+      throwCoded('ONBOARDING_INCOMPLETE', 'ONBOARDING_INCOMPLETE');
+    }
 
-  const drifted =
-    user.daily_calories !== computed.daily_calories ||
-    user.protein_grams !== computed.protein_grams ||
-    user.fat_grams !== computed.fat_grams ||
-    user.carb_grams !== computed.carb_grams;
+    const computed = calculateCalories(
+      inputs.weightKg,
+      inputs.heightCm,
+      inputs.age,
+      inputs.sex,
+      inputs.activityFactor,
+      inputs.goal
+    );
 
-  if (drifted) {
-    // Lock the user row before writing the recomputed macros so a
-    // concurrent profile update can't slip in between this read and
-    // the persist, which would re-overwrite the freshly-saved profile
-    // with stale-input macros. Read-mostly path that occasionally
-    // writes — the cost of a brief row lock is acceptable for the
-    // correctness guarantee.
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      await client.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [
-        userId,
-      ]);
+    const drifted =
+      user.daily_calories !== computed.daily_calories ||
+      user.protein_grams !== computed.protein_grams ||
+      user.fat_grams !== computed.fat_grams ||
+      user.carb_grams !== computed.carb_grams;
+
+    if (drifted) {
       await client.query(
         `UPDATE users
             SET daily_calories = $1, protein_grams = $2, fat_grams = $3, carb_grams = $4,
@@ -103,16 +107,16 @@ export async function getCurrentMacros(userId: number): Promise<MacroTargets> {
           userId,
         ]
       );
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
     }
-  }
 
-  return computed;
+    await client.query('COMMIT');
+    return computed;
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 /**
@@ -166,30 +170,21 @@ export interface DietLogResult {
 }
 
 /**
- * Local-timezone YYYY-MM-DD string — matches the user's perceived
- * "today" rather than UTC. Server is colocated with the user in dev;
- * for prod, pinning server TZ to UTC and having the client send UTC
- * keeps this consistent without timezone gymnastics.
- */
-const localTodayISO = (date: Date = new Date()): string => {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-};
-
-/**
- * Difference in days between two YYYY-MM-DD strings. Builds Dates at
- * local midnight (matching what `localTodayISO` produces) so the
- * subtraction is exact: no DST/UTC drift because both sides come from
- * the same constructor in the same timezone.
+ * Difference in days between two YYYY-MM-DD strings. Anchors both
+ * endpoints at UTC midnight via `Date.UTC(...)` so DST transitions
+ * (spring-forward 23h, fall-back 25h) don't push the difference off by
+ * a day. The previous implementation used local-midnight `new Date(y,
+ * m, d)` + `Math.floor`, which on a spring-forward boundary returned
+ * `Math.floor(82_800_000 / 86_400_000) = 0` for two consecutive days
+ * — visible to users as "ya logueado hoy" stuck for the day after the
+ * DST switch and the streak frozen for that one day per year.
  */
 const diffInDays = (a: string, b: string): number => {
   const [ay, am, ad] = a.split('-').map(Number);
   const [by, bm, bd] = b.split('-').map(Number);
-  const aMs = new Date(ay, am - 1, ad).getTime();
-  const bMs = new Date(by, bm - 1, bd).getTime();
-  return Math.floor((aMs - bMs) / 86_400_000);
+  const aMs = Date.UTC(ay, am - 1, ad);
+  const bMs = Date.UTC(by, bm - 1, bd);
+  return Math.round((aMs - bMs) / 86_400_000);
 };
 
 interface NextDietStreak {
@@ -277,7 +272,7 @@ export async function logDietForToday(
     );
 
     if (rows.length === 0) {
-      await client.query('ROLLBACK');
+      await client.query('ROLLBACK').catch(() => undefined);
       return null;
     }
 
@@ -321,16 +316,26 @@ export async function logDietForToday(
     }
 
     await client.query('COMMIT');
+    // When vigor was already at the level cap before the log, applying
+    // DIET_VIGOR_GAIN is a no-op (applyXpToLevel froze the bar one short
+    // of the next threshold). Reporting the raw +N gain in that case
+    // confused the user: the modal flashed "+10 VIGOR" but the radar
+    // didn't move and the level stayed at 99. Surface the *effective*
+    // delta — zero when capped — so the modal numbers match reality.
+    const wasCapped = current.vigor_level >= MAX_STAT_LEVEL;
+    const effectiveDelta = next.alreadyLoggedToday || wasCapped
+      ? 0
+      : DIET_VIGOR_GAIN;
     return {
       ...next,
       vigor_before_xp: current.vigor,
       vigor_before_level: current.vigor_level,
       vigor_after_xp: nextVigorXp,
       vigor_after_level: nextVigorLevel,
-      vigor_delta: next.alreadyLoggedToday ? 0 : DIET_VIGOR_GAIN,
+      vigor_delta: effectiveDelta,
     };
   } catch (err) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => undefined);
     throw err;
   } finally {
     client.release();
@@ -342,9 +347,7 @@ export async function logDietForToday(
  * view to render the button (✓ DIETA HOY vs ✓ REGISTRADO HOY) and the
  * current streak chip without going through the log endpoint.
  */
-export async function getDietState(
-  userId: number
-): Promise<DietState | null> {
+export async function getDietState(userId: number): Promise<DietState | null> {
   const result = await pool.query<{
     diet_streak: number;
     best_diet_streak: number;

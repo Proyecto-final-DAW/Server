@@ -1,6 +1,7 @@
 import { Response } from 'express';
 
 import * as dietService from '../services/diet.service';
+import { localTodayISO } from '../utils/date';
 import { sendServerError } from '../utils/httpError';
 import { AuthRequest } from './UserController';
 
@@ -44,9 +45,9 @@ const DietController = {
       }
       // Single query — `isDietLoggedToday` previously re-ran
       // `getDietState`, doubling the round-trip on every dashboard
-      // load. Build the comparison string with server-LOCAL date
-      // components (matching the `localTodayISO` helper that the
-      // write path used to store `last_diet_date`). A bare
+      // load. Comparison goes through `localTodayISO` (server-LOCAL
+      // YYYY-MM-DD) so the result lines up with the helper the write
+      // path uses to store `last_diet_date`. A bare
       // `toISOString().slice(0,10)` would diverge in any TZ behind
       // UTC and falsely report `logged_today=false` after a session
       // logged late evening local.
@@ -54,11 +55,7 @@ const DietController = {
       if (!state) {
         return res.status(404).json({ message: 'Stats not found' });
       }
-      const now = new Date();
-      const todayStr = `${now.getFullYear()}-${String(
-        now.getMonth() + 1
-      ).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-      const loggedToday = state.last_diet_date === todayStr;
+      const loggedToday = state.last_diet_date === localTodayISO();
       return res.status(200).json({
         diet_streak: state.diet_streak,
         best_diet_streak: state.best_diet_streak,

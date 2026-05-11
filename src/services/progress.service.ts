@@ -4,6 +4,19 @@ import { getExerciseMetaById } from './exercise.service';
 import { calculateCalories } from './macros.service';
 import { normalizeUserRow } from './user.service';
 
+/**
+ * Server-LOCAL `YYYY-MM-DD` from a `Date`. Mirrors the convention used
+ * by `localTodayISO()` in diet.service and session.service. UTC-based
+ * extraction (`toISOString().slice(0,10)`) is the canonical TZ bug —
+ * it shifts late-evening local dates one day back.
+ */
+const toLocalIsoDate = (date: Date): string => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
 export interface WeightEntry {
   date: string;
   weight: number;
@@ -36,7 +49,7 @@ export const getWeightHistory = async (
   const params: unknown[] = [userId];
   let whereBefore = '';
   if (options.before) {
-    params.push(options.before.toISOString().split('T')[0]);
+    params.push(toLocalIsoDate(options.before));
     whereBefore = ` AND date < $${params.length}`;
   }
   params.push(options.limit);
@@ -65,7 +78,13 @@ export const registerWeight = async (
   try {
     await client.query('BEGIN');
 
-    const isoDate = date.toISOString().split('T')[0];
+    // Use server-local date components, not UTC. `toISOString().split('T')[0]`
+    // is the canonical bug this codebase fights everywhere else: a user in
+    // CEST logging at 01:30 local crosses into the previous UTC day, so the
+    // weight ends up stamped one day off. Convention is identical to
+    // `localTodayISO()` in diet.service / session.service — server-LOCAL
+    // calendar day, no timezone gymnastics.
+    const isoDate = toLocalIsoDate(date);
 
     const inserted = await client.query(
       `INSERT INTO weight_logs (user_id, weight, date)
@@ -124,7 +143,10 @@ export const registerWeight = async (
     await client.query('COMMIT');
     return inserted.rows[0];
   } catch (error) {
-    await client.query('ROLLBACK');
+    // .catch() so a failing ROLLBACK (connection died, broken socket)
+    // doesn't replace the original error — the caller needs to see
+    // why the transaction blew up, not why the rollback couldn't run.
+    await client.query('ROLLBACK').catch(() => undefined);
     throw error;
   } finally {
     client.release();
@@ -173,8 +195,7 @@ export const getExerciseMaxHistory = async (
 // walk"), so a small keyword list cleans them up reliably.
 const STRETCH_NAME_PATTERN =
   /\b(stretch|rotation|mobility|movilidad|yoga|cat[- ]?cow)\b/i;
-const CARDIO_NAME_PATTERN =
-  /\b(walk|jog|running|run|cycling|cardio|swim)\b/i;
+const CARDIO_NAME_PATTERN = /\b(walk|jog|running|run|cycling|cardio|swim)\b/i;
 
 /**
  * Bodyweight / stretch / cardio entries shouldn't pollute the

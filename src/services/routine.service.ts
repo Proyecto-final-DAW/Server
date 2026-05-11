@@ -148,7 +148,7 @@ export const create = async (userId: number, input: CreateRoutineInput) => {
     await client.query('COMMIT');
     return await getById(userId, routine.id);
   } catch (e) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => undefined);
     throw e;
   } finally {
     client.release();
@@ -176,7 +176,7 @@ export const update = async (
       [routineId, userId]
     );
     if (exists.rowCount === 0) {
-      await client.query('ROLLBACK');
+      await client.query('ROLLBACK').catch(() => undefined);
       return null;
     }
 
@@ -241,7 +241,7 @@ export const update = async (
     await client.query('COMMIT');
     return await getById(userId, routineId);
   } catch (e) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => undefined);
     throw e;
   } finally {
     client.release();

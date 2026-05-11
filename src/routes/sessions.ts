@@ -15,6 +15,10 @@ router.post(
 );
 router.get('/weekly-summary', authentication, SessionController.weeklySummary);
 router.get('/history', authentication, SessionController.getHistory);
-router.get('/detail/:sessionId', authentication, SessionController.getDetail);
+
+// `GET /sessions/detail/:sessionId` was unreachable — no client ever
+// called it, the history endpoint already returns embedded exercises,
+// and an unused public surface is a maintenance liability. Re-add only
+// alongside a real consumer.
 
 export default router;

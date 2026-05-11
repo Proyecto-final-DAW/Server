@@ -65,6 +65,18 @@ export const updateProfileSchema = z
     equipment: z.array(equipmentSchema).optional(),
     days_per_week: daysPerWeekSchema.optional(),
     injuries: z.array(injurySchema).optional(),
+    // Free-text describing an "OTHER" injury. Empty string clears
+    // the column. Cap at 500 chars to match the onboarding schema
+    // and the DB column. Note: composing `trimmed(...).nullable()`
+    // produced a ZodEffects that the form's empty-string clear path
+    // rejected as "Invalid request body"; using `z.string().trim()`
+    // keeps the chain on a plain ZodString so the standard chaining
+    // rules apply.
+    injury_notes: z
+      .string()
+      .trim()
+      .max(500, 'injury_notes must be at most 500 characters')
+      .optional(),
   })
   .strict();
 

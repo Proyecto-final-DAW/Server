@@ -23,6 +23,7 @@ const ALLOWED_PROFILE_FIELDS: Record<string, FieldSpec> = {
   equipment: { column: 'equipment', cast: '"Equipment"[]' },
   days_per_week: { column: 'days_per_week' },
   injuries: { column: 'injuries', cast: '"Injury"[]' },
+  injury_notes: { column: 'injury_notes' },
 };
 
 const MACRO_TRIGGER_FIELDS = [
@@ -73,10 +74,9 @@ const PROFILE_USER_COLUMNS = [
 
 export async function getProfileSummary(userId: number) {
   const [userResult, statsResult, sessionsResult] = await Promise.all([
-    pool.query(
-      `SELECT ${PROFILE_USER_COLUMNS} FROM users WHERE id = $1`,
-      [userId]
-    ),
+    pool.query(`SELECT ${PROFILE_USER_COLUMNS} FROM users WHERE id = $1`, [
+      userId,
+    ]),
     pool.query('SELECT streak, best_streak FROM stats WHERE user_id = $1', [
       userId,
     ]),

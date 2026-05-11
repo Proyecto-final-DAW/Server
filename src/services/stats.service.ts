@@ -75,8 +75,8 @@ export const updateStatsInTx = async (
   userId: number,
   data: Record<string, unknown>
 ) => {
-  const allowedEntries = Object.entries(data).filter(
-    ([key]) => WRITABLE_STAT_COLUMNS.has(key)
+  const allowedEntries = Object.entries(data).filter(([key]) =>
+    WRITABLE_STAT_COLUMNS.has(key)
   );
   if (allowedEntries.length === 0) {
     const fallback = await client.query(
@@ -101,8 +101,8 @@ export const updateStats = async (
   userId: number,
   data: Record<string, unknown>
 ) => {
-  const allowedEntries = Object.entries(data).filter(
-    ([key]) => WRITABLE_STAT_COLUMNS.has(key)
+  const allowedEntries = Object.entries(data).filter(([key]) =>
+    WRITABLE_STAT_COLUMNS.has(key)
   );
   if (allowedEntries.length === 0) {
     return findByUserId(userId);
@@ -283,4 +283,3 @@ export const getStatHistory = async (
   const snapshots = replayLevels(sessionsInOrder);
   return snapshots.map((snap, i) => ({ date: dates[i], ...snap }));
 };
-

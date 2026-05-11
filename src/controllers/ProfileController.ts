@@ -63,6 +63,7 @@ const ProfileController = {
 
       if (!currentPassword || !newPassword) {
         return res.status(400).json({
+          code: 'PASSWORD_REQUIRED',
           message: 'Current password and new password are required',
         });
       }
@@ -94,9 +95,10 @@ const ProfileController = {
             reason: 'INVALID_PASSWORD',
           },
         });
-        return res
-          .status(401)
-          .json({ message: 'Current password is incorrect' });
+        return res.status(401).json({
+          code: 'INVALID_PASSWORD',
+          message: 'Current password is incorrect',
+        });
       }
       if (error.code === 'PASSWORD_TOO_SHORT') {
         await safeWriteAuditEvent(req, {
@@ -110,9 +112,10 @@ const ProfileController = {
             reason: 'PASSWORD_TOO_SHORT',
           },
         });
-        return res
-          .status(400)
-          .json({ message: 'New password must be at least 8 characters' });
+        return res.status(400).json({
+          code: 'PASSWORD_TOO_SHORT',
+          message: 'New password must be at least 8 characters',
+        });
       }
       await safeWriteAuditEvent(req, {
         action: 'PROFILE_CHANGE_PASSWORD_FAILED',

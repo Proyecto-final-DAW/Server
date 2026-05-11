@@ -105,9 +105,7 @@ const dataset: Exercise[] = rawDataset.map((entry) => ({
 const exerciseMetaById = new Map<
   string,
   { category: string; equipment: string }
->(
-  dataset.map((e) => [e.id, { category: e.category, equipment: e.equipment }])
-);
+>(dataset.map((e) => [e.id, { category: e.category, equipment: e.equipment }]));
 
 export const getExerciseMetaById = (
   apiId: string

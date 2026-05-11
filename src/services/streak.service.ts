@@ -62,11 +62,27 @@ export interface StreakResult {
 }
 
 /**
- * UTC Monday 00:00 of the ISO week that contains `date`.
+ * Monday 00:00 (anchored at UTC for cheap arithmetic) of the ISO week
+ * that contains the LOCAL date of `date`.
+ *
+ * Why local getters and not `getUTC*`: the rest of the date pipeline is
+ * local — `localTodayISO()` formats the server's local YYYY-MM-DD, the
+ * client sends `toISODate(new Date())` (also local), and sessions are
+ * stored as DATE columns whose semantics are "the calendar day the user
+ * trained". Reading UTC components off `new Date()` in any TZ ahead of
+ * UTC silently shifts the answer one ISO week back during the window
+ * between local midnight and UTC midnight — e.g. Monday 00:30 CEST
+ * reads as Sunday 22:30 UTC and returns the PREVIOUS week's Monday,
+ * which then excludes today's session from `[weekMonday, weekEnd)` and
+ * fires the at-risk warning even though the user just trained.
+ *
+ * The returned Date is still a UTC-midnight instant of the resolved
+ * Monday so `weekMonday.getTime() + 7 * 86_400_000` arithmetic stays
+ * DST-safe (no offset jumps mid-week).
  */
 export const isoWeekMonday = (date: Date): Date => {
   const utc = new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
   );
   const dayMonFirst = utc.getUTCDay() === 0 ? 7 : utc.getUTCDay();
   utc.setUTCDate(utc.getUTCDate() - (dayMonFirst - 1));
@@ -83,7 +99,32 @@ const diffInWeeks = (later: Date, earlier: Date): number => {
   return Math.round(ms / (7 * 86_400_000));
 };
 
-const toIsoDateOnly = (date: Date): string => date.toISOString().slice(0, 10);
+/**
+ * YYYY-MM-DD for Dates produced by `isoWeekMonday()` — i.e. UTC midnight
+ * of the resolved Monday. UTC getters are correct here because the value
+ * was constructed via `Date.UTC(...)` and uses UTC midnight as the
+ * canonical anchor for DST-safe week arithmetic. The local-midnight
+ * Date that `parseLocalDay()` returns must be formatted separately
+ * (`fromLocalMidnight()` below) — using UTC getters on that would shift
+ * the day back one in any TZ ahead of UTC, which is the original
+ * `last_session_date` off-by-one bug.
+ */
+const fromUtcMidnight = (date: Date): string =>
+  date.toISOString().slice(0, 10);
+
+/**
+ * YYYY-MM-DD for Dates produced by `parseLocalDay()` — i.e. local
+ * midnight on the calendar day the user is in. Local getters keep the
+ * day calendar-stable across timezones; `toISOString()` would reroute
+ * through UTC and silently move the date one day in either direction
+ * depending on the user's offset.
+ */
+const fromLocalMidnight = (date: Date): string => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
 
 /**
  * Computes the next streak state given a session save. Pure function:
@@ -105,10 +146,17 @@ export const calculateStreak = (inputs: StreakInputs): StreakResult => {
   const { current, sessionsThisWeek, sessionDate } = inputs;
 
   const sessionWeekMonday = isoWeekMonday(sessionDate);
-  const sessionDateStr = toIsoDateOnly(sessionDate);
-  const sessionWeekMondayStr = toIsoDateOnly(sessionWeekMonday);
+  // `sessionDate` is local-midnight (built by `parseLocalDay()` from a
+  // local YYYY-MM-DD), so format it with local getters — UTC-based
+  // formatting was the source of the off-by-one in `last_session_date`
+  // for sessions saved in the early hours of the local day.
+  const sessionDateStr = fromLocalMidnight(sessionDate);
+  // `sessionWeekMonday` and `last_qualifying_week_monday` are
+  // UTC-midnight Dates (anchored that way for DST-safe arithmetic), so
+  // format them with UTC getters.
+  const sessionWeekMondayStr = fromUtcMidnight(sessionWeekMonday);
   const lastQualifyingStr = current.last_qualifying_week_monday
-    ? toIsoDateOnly(current.last_qualifying_week_monday)
+    ? fromUtcMidnight(current.last_qualifying_week_monday)
     : '';
 
   // Bonus session in an already-qualified week — week's already in

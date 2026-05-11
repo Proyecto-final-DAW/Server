@@ -68,9 +68,7 @@ export function resolveMacroInputs(
   const activityFactor = ACTIVITY_FACTOR_MAP[user.activity_level as string];
   if (!activityFactor) return null;
 
-  const age = ageFromBirthDate(
-    new Date(user.birth_date as string | Date)
-  );
+  const age = ageFromBirthDate(new Date(user.birth_date as string | Date));
   if (!Number.isFinite(age) || age < MIN_AGE || age > MAX_AGE) {
     return null;
   }

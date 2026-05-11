@@ -1,4 +1,5 @@
 import pool from '../db/pool';
+import { localTodayISO } from '../utils/date';
 import {
   countTrainingDaysInWeek,
   getUserWeeklyTarget,
@@ -25,36 +26,55 @@ type CardsResponse = {
 export const getCards = async (userId: number): Promise<CardsResponse> => {
   const now = new Date();
   const thisWeekMonday = isoWeekMonday(now);
+  const nextWeekMonday = new Date(thisWeekMonday.getTime() + 7 * 86_400_000);
+  // Pass local "this week" / "today" through as parameters instead of
+  // letting Postgres derive them from `CURRENT_DATE`. The pool pins
+  // session TZ to UTC, so `date_trunc('week', CURRENT_DATE)` in SQL
+  // resolves to the UTC week boundary and disagreed with the client's
+  // local "today" during the [local-midnight, UTC-midnight) window
+  // (e.g. Mon 00:30 CEST reads as Sun in UTC, putting today's session
+  // in the *previous* ISO week and firing the at-risk warning even
+  // though the user trained moments ago). JS-side dates use local
+  // getters via `isoWeekMonday`/`localTodayISO`, matching the format
+  // the client emits and the DATE values stored in `sessions`.
+  const todayStr = localTodayISO(now);
+  const mondayStr = thisWeekMonday.toISOString().slice(0, 10);
+  const nextStr = nextWeekMonday.toISOString().slice(0, 10);
 
   // `stats` was previously emitted in the response but never read on
   // the client (the dashboard uses `useStats` for pillar values). The
   // field is gone now to save a few hundred bytes per dashboard load
   // and to avoid the misleading impression that this endpoint is the
   // source of truth for stat values.
-  const [stats, trainingDaysResult, lastWorkoutResult, target, sessionsThisWeek] =
-    await Promise.all([
-      statsService.findByUserId(userId),
-      pool.query<{ day: string }>(
-        `SELECT DISTINCT TO_CHAR(s.date, 'YYYY-MM-DD') AS day
+  const [
+    stats,
+    trainingDaysResult,
+    lastWorkoutResult,
+    target,
+    sessionsThisWeek,
+  ] = await Promise.all([
+    statsService.findByUserId(userId),
+    pool.query<{ day: string }>(
+      `SELECT DISTINCT TO_CHAR(s.date, 'YYYY-MM-DD') AS day
            FROM sessions s
           WHERE s.user_id = $1
-            AND s.date >= date_trunc('week', CURRENT_DATE)::date
-            AND s.date < (date_trunc('week', CURRENT_DATE) + INTERVAL '1 week')::date
+            AND s.date >= $2::date
+            AND s.date <  $3::date
           ORDER BY day ASC`,
-        [userId]
-      ),
-      pool.query<{ days_ago: number | null }>(
-        `SELECT CASE
+      [userId, mondayStr, nextStr]
+    ),
+    pool.query<{ days_ago: number | null }>(
+      `SELECT CASE
                   WHEN MAX(s.date) IS NULL THEN NULL
-                  ELSE (CURRENT_DATE - MAX(s.date))::int
+                  ELSE ($2::date - MAX(s.date))::int
                 END AS days_ago
            FROM sessions s
           WHERE s.user_id = $1`,
-        [userId]
-      ),
-      getUserWeeklyTarget(userId),
-      countTrainingDaysInWeek(userId, thisWeekMonday),
-    ]);
+      [userId, todayStr]
+    ),
+    getUserWeeklyTarget(userId),
+    countTrainingDaysInWeek(userId, thisWeekMonday),
+  ]);
 
   // Live-expire: if the stored streak is from more than one ISO week
   // ago AND the user hasn't qualified this week yet, show 0.

@@ -102,7 +102,12 @@ export type CharacterClass =
 export const NOVICE: NoviceClass = {
   id: 'ESCUDERO',
   tier: 0,
-  name: 'Escudero',
+  // Display label for the rank-F starting state. The internal id stays
+  // 'ESCUDERO' so existing user_class_state rows and FK references
+  // don't need a migration; only the visible string changes. The user
+  // reads "Sin clase" because tier 0 hasn't yet picked a path —
+  // calling them "Escudero" implies they made a choice they didn't.
+  name: 'Sin clase',
   frase: 'Todo heroe empezo siendo nadie.',
 };
 
@@ -392,7 +397,7 @@ export const LEGENDARIES: readonly LegendaryClass[] = [
     iconHint: '🌿',
     requiredStats: ['vigor', 'stamina'],
     transcendentName: 'Primarca',
-    transcendentFrase: 'El bosque desperto porque el lo soño.',
+    transcendentFrase: 'El bosque desperto porque el lo sono.',
   },
   {
     id: 'VENGADOR',
