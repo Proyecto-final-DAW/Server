@@ -109,8 +109,7 @@ const diffInWeeks = (later: Date, earlier: Date): number => {
  * the day back one in any TZ ahead of UTC, which is the original
  * `last_session_date` off-by-one bug.
  */
-const fromUtcMidnight = (date: Date): string =>
-  date.toISOString().slice(0, 10);
+const fromUtcMidnight = (date: Date): string => date.toISOString().slice(0, 10);
 
 /**
  * YYYY-MM-DD for Dates produced by `parseLocalDay()` — i.e. local

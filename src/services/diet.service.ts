@@ -323,9 +323,8 @@ export async function logDietForToday(
     // didn't move and the level stayed at 99. Surface the *effective*
     // delta — zero when capped — so the modal numbers match reality.
     const wasCapped = current.vigor_level >= MAX_STAT_LEVEL;
-    const effectiveDelta = next.alreadyLoggedToday || wasCapped
-      ? 0
-      : DIET_VIGOR_GAIN;
+    const effectiveDelta =
+      next.alreadyLoggedToday || wasCapped ? 0 : DIET_VIGOR_GAIN;
     return {
       ...next,
       vigor_before_xp: current.vigor,
