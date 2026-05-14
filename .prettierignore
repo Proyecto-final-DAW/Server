@@ -24,7 +24,7 @@ eslint.config.mjs
 # Root db only (migrations). src/db formatted with prettier-plugin-sql.
 /db/
 
-# Prisma (use: npm run db:prisma:format)
+# Prisma (use: pnpm run db:prisma:format)
 *.prisma
 prisma/migrations
 prisma/@prisma

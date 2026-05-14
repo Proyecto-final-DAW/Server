@@ -1,0 +1,14 @@
+allowBuilds:
+  '@parcel/watcher': false
+  '@prisma/engines': true
+  esbuild: true
+  prisma: false
+  sharp: true
+  unix-dgram: false
+
+overrides:
+  '@hono/node-server': 1.19.13
+  hono: '>=4.12.18'
+  '@fastify/static': ^9.1.1
+  lodash: 4.18.1
+  uuid: ^14.0.0

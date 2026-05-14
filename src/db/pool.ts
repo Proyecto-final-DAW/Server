@@ -41,14 +41,13 @@ function getPool(): Pool {
     }
 
     // Pool sizing — `pg`'s default `max` is 10 with no idle/connection
-    // timeouts. On a single long-lived server that's fine, but on
-    // serverless (Netlify Functions) every cold instance opens its
-    // own pool of 10 connections; under burst load N instances ×
-    // 10 conns can saturate Postgres. Keep `max` low (Netlify
-    // function-instance default = 5) and add an idle timeout so
-    // sleeping connections free up fast. Override per-deploy via
-    // env to tune for traditional VM-style hosting where a higher
-    // `max` makes more sense.
+    // timeouts. The backend runs as a single long-lived Render web
+    // service, but the database is Neon, whose free/shared tiers cap
+    // total connections low — and a deploy briefly overlaps the old
+    // and new instances, each with its own pool. Keep `max` low
+    // (default 5) and add an idle timeout so sleeping connections free
+    // up fast. Override per-deploy via env to tune for hosting where a
+    // higher `max` makes more sense.
     const parseInt = (raw: string | undefined, fallback: number): number => {
       if (!raw) return fallback;
       const n = Number.parseInt(raw, 10);
@@ -64,9 +63,9 @@ function getPool(): Pool {
       ),
       // Cap any single query at 10s. Without this, a runaway full
       // table scan or a query waiting on a row lock holds a
-      // connection forever. With pool max=5 in the default serverless
-      // config, just 5 such queries brick the entire pool — every
-      // other request 5xxs with `connectionTimeoutMillis` exceeded.
+      // connection forever. With the default pool max=5, just 5 such
+      // queries brick the entire pool — every other request 5xxs with
+      // `connectionTimeoutMillis` exceeded.
       // 10s is generous (the slowest legit query in the app is the
       // session-history paginated read, ~50ms on prod data).
       statement_timeout: parseInt(process.env.PG_STATEMENT_TIMEOUT_MS, 10_000),

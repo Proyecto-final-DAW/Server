@@ -37,12 +37,6 @@ export function createApp() {
     'JWT_EXPIRES_IN',
   ];
 
-  // In Netlify Functions, PORT is not used (there is no long-lived listener).
-  if (process.env.NETLIFY) {
-    const portIndex = requiredEnvVars.indexOf('PORT');
-    if (portIndex >= 0) requiredEnvVars.splice(portIndex, 1);
-  }
-
   const missingVars = requiredEnvVars.filter((key) => !process.env[key]);
   if (missingVars.length > 0) {
     throw new Error(
@@ -52,9 +46,10 @@ export function createApp() {
 
   const app = express();
 
-  // Ensure req.ip works correctly behind reverse proxies (e.g. Netlify).
-  // In serverless/proxied deployments, the client IP comes from X-Forwarded-For.
-  if (process.env.NETLIFY || process.env.TRUST_PROXY) {
+  // Ensure req.ip works correctly behind reverse proxies (e.g. Render).
+  // Render sets RENDER=true automatically and routes traffic through its
+  // load balancer, so the real client IP comes from X-Forwarded-For.
+  if (process.env.RENDER || process.env.TRUST_PROXY) {
     const trustProxyRaw = process.env.TRUST_PROXY?.trim();
     const trustProxy =
       trustProxyRaw && trustProxyRaw.length > 0
@@ -94,6 +89,12 @@ export function createApp() {
     })
   );
 
+  // Lightweight health check for Render. Declared before the logger and the
+  // rate limiters so platform probes are neither logged as noise nor throttled.
+  app.get('/health', (_req: Request, res: Response) => {
+    res.status(200).json({ status: 'ok' });
+  });
+
   app.use(httpLogger);
 
   // Soft-throttle first, then hard-limit with 429.
@@ -121,15 +122,6 @@ export function createApp() {
       ignoreKeys: ['password'],
     })
   );
-
-  // Health probe — load balancers / orchestrators / uptime monitors
-  // hit this to check liveness. Skips auth and the slow/limit chain
-  // (it's mounted before the routers but after CORS/sanitize). Body
-  // is small and stable so a 200 is the only signal: anything else
-  // means the process is wedged.
-  app.get('/health', (_req: Request, res: Response) => {
-    res.status(200).json({ status: 'ok' });
-  });
 
   app.use('/users', usersRouter);
   app.use('/profile', profileRouter);

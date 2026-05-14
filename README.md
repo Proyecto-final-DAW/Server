@@ -5,7 +5,7 @@ Express API for gym users: **auth**, **stats**, **exercises**, **macros / nutrit
 ## Prerequisites
 
 - **Node.js v22+** → https://nodejs.org
-- **npm v10+** (included with Node.js)
+- **pnpm v11+** → https://pnpm.io/installation (recommended: `corepack enable` then use the `packageManager` version from `package.json`)
 - **Git** → https://git-scm.com
 - **Docker** (option A) → https://www.docker.com/products/docker-desktop
 - **PostgreSQL 15** (option B) → https://www.postgresql.org/download
@@ -44,9 +44,9 @@ CREATE DATABASE gymapp OWNER gymuser;
 ```bash
 cp .env.local.example .env.local
 # Edit .env.local: set JWT_SECRET
-npm install
-npm run db:migrate # apply migrations
-npm run dev
+pnpm install
+pnpm run db:migrate # apply migrations
+pnpm run dev
 ```
 
 The server listens on `http://localhost:${PORT}` (see `.env.local`). On start it logs a successful database connection or exits if it cannot connect.
@@ -57,7 +57,7 @@ The server listens on `http://localhost:${PORT}` (see `.env.local`). On start it
 - **Production**: `.env.production` (see `.env.production.example`)
 - **Optional base file**: `.env` (shared defaults; loaded first)
 
-The DB migrations run via dbmate and require `DATABASE_URL`. `npm run db:migrate` loads the same env files as the server.
+The DB migrations run via dbmate and require `DATABASE_URL`. `pnpm run db:migrate` loads the same env files as the server.
 
 ## API (overview)
 
@@ -105,24 +105,24 @@ Header: `Authorization: Bearer <token>` from login.
 
 ## Scripts
 
-| Command                              | Description                                                     |
-| ------------------------------------ | --------------------------------------------------------------- |
-| `npm run dev`                        | Start dev server (tsx watch)                                    |
-| `npm run build`                      | Compile TypeScript                                              |
-| `npm run start`                      | Build and run production                                        |
-| `npm run lint`                       | Run ESLint                                                      |
-| `npm run format`                     | Format with Prettier                                            |
-| `npm run db:migrate`                 | Apply pending migrations                                        |
-| `npm run db:migrate:down`            | Rollback last migration                                         |
-| `npm run db:migrate:generate <name>` | Generate migration from `prisma/schema.prisma` (see note below) |
-| `npm run db:migrate:new <name>`      | Create empty migration                                          |
-| `npm run db:dump`                    | Export current schema                                           |
-| `npm run db:prisma:format`           | Format Prisma schema                                            |
-| `npm run db:prisma:validate`         | Validate Prisma schema                                          |
+| Command                               | Description                                                     |
+| ------------------------------------- | --------------------------------------------------------------- |
+| `pnpm run dev`                        | Start dev server (tsx watch)                                    |
+| `pnpm run build`                      | Compile TypeScript                                              |
+| `pnpm run start`                      | Build and run production                                        |
+| `pnpm run lint`                       | Run ESLint                                                      |
+| `pnpm run format`                     | Format with Prettier                                            |
+| `pnpm run db:migrate`                 | Apply pending migrations                                        |
+| `pnpm run db:migrate:down`            | Rollback last migration                                         |
+| `pnpm run db:migrate:generate <name>` | Generate migration from `prisma/schema.prisma` (see note below) |
+| `pnpm run db:migrate:new <name>`      | Create empty migration                                          |
+| `pnpm run db:dump`                    | Export current schema                                           |
+| `pnpm run db:prisma:format`           | Format Prisma schema                                            |
+| `pnpm run db:prisma:validate`         | Validate Prisma schema                                          |
 
-**Migrations:** Edit `prisma/schema.prisma`, then run `npm run db:migrate:generate descriptive_name`. If npm does not forward the name, use `npm run db:migrate:generate -- descriptive_name`. Details: [MIGRATIONS.md](./MIGRATIONS.md) and [scripts/README.md](./scripts/README.md).
+**Migrations:** Edit `prisma/schema.prisma`, then run `pnpm run db:migrate:generate descriptive_name`. If pnpm does not forward the name, use `pnpm run db:migrate:generate -- descriptive_name`. Details: [MIGRATIONS.md](./MIGRATIONS.md) and [scripts/README.md](./scripts/README.md).
 
-After schema changes that affect generated types, run **`npx prisma generate`**.
+After schema changes that affect generated types, run **`pnpm exec prisma generate`**.
 
 ## Workflow
 
@@ -138,12 +138,45 @@ git push origin feature/short-name
 
 Open a PR → review → merge.
 
+## Deployment (Render)
+
+The backend is deployed on [Render](https://render.com) as a Node web service.
+The database stays on **Neon** (external) and the frontend is on **Vercel**.
+
+Configuration lives in [`render.yaml`](./render.yaml) (a Render Blueprint):
+
+- **Build**: `pnpm install --frozen-lockfile && pnpm run build`
+- **Start**: `pnpm run db:migrate && node dist/index.js` — pending dbmate migrations run on every deploy
+- **Health check**: `GET /health`
+
+### Environment variables (set in the Render dashboard)
+
+| Variable         | Notes                                                      |
+| ---------------- | ---------------------------------------------------------- |
+| `DATABASE_URL`   | Neon connection string (include `sslmode=require`)         |
+| `JWT_SECRET`     | Secret used to sign JWTs                                   |
+| `CORS_ORIGIN`    | Vercel frontend origin, e.g. `https://your-app.vercel.app` |
+| `JWT_EXPIRES_IN` | Token lifetime — already set to `7d` in `render.yaml`      |
+| `NODE_ENV`       | `production` — already set in `render.yaml`                |
+
+`PORT` is injected by Render automatically. `trust proxy` is enabled
+automatically because Render exposes `RENDER=true` (see `src/app.ts`).
+
+To deploy: in Render choose **New → Blueprint**, pick this repo, and fill in
+the three `sync: false` variables above. Pushes to `main` then auto-deploy.
+
+> **Note:** the free plan spins the service down after inactivity, so the
+> first request after an idle period is slow (cold start).
+
+Once the service is live, point the **Client**'s `VITE_PROD_API_BASE_URL`
+(in Vercel) at the Render URL, e.g. `https://tfg-server.onrender.com`.
+
 ## Project layout
 
 - `src/` — Application code (Express, routes, controllers, services, db)
 - `src/services/macros.service.ts` — Calorie and macro calculation (Mifflin–St Jeor)
 - `db/migrations/` — dbmate SQL migrations
-- `prisma/schema.prisma` — Source of truth for the DB shape; used with migra to generate migrations. TypeScript imports **`Sex` / `Goal`** (and related types) from **`@prisma/client`** after `npx prisma generate`.
+- `prisma/schema.prisma` — Source of truth for the DB shape; used with migra to generate migrations. TypeScript imports **`Sex` / `Goal`** (and related types) from **`@prisma/client`** after `pnpm exec prisma generate`.
 - `scripts/` — `migrate-auto.sh`, `db-helper.mjs`, `postprocess-migra-sql.mjs`, `migra-postprocess.config.json`
 - `.github/workflows/` — CI/CD (when added)
 

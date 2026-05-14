@@ -4,11 +4,11 @@ This folder supports **automatic dbmate migrations** driven by **`prisma/schema.
 
 ## migrate-auto.sh
 
-**Entry:** `npm run db:migrate:generate` → `./scripts/migrate-auto.sh <migration_name>`  
-If npm does not pass the name through, use:
+**Entry:** `pnpm run db:migrate:generate` → `./scripts/migrate-auto.sh <migration_name>`  
+If pnpm does not pass the name through, use:
 
 ```bash
-npm run db:migrate:generate -- my_migration_name
+pnpm run db:migrate:generate -- my_migration_name
 ```
 
 **Requirements**
@@ -27,7 +27,7 @@ npm run db:migrate:generate -- my_migration_name
 
 **Important:** The script builds the temp DB URL by replacing **`gymapp`** inside **`DATABASE_URL`**. If your database name differs, see **MIGRATIONS.md** (Prerequisites).
 
-Always **review** the generated SQL before **`npm run db:migrate`**.
+Always **review** the generated SQL before **`pnpm run db:migrate`**.
 
 ## postprocess-migra-sql.mjs & migra-postprocess.config.json
 
@@ -49,23 +49,23 @@ node scripts/db-helper.mjs drop-db <database_name>
 
 Requires **`DATABASE_URL`** (e.g. from `.env`). Normally you do not run this by hand.
 
-## npm scripts (migrations & Prisma)
+## pnpm scripts (migrations & Prisma)
 
 ```bash
-npm run db:migrate          # dbmate up — apply pending migrations
-npm run db:migrate:down     # Rollback last migration
-npm run db:migrate:new      # Empty migration template
-npm run db:migrate:generate # Runs migrate-auto.sh — pass name (see above)
+pnpm run db:migrate          # dbmate up — apply pending migrations
+pnpm run db:migrate:down     # Rollback last migration
+pnpm run db:migrate:new      # Empty migration template
+pnpm run db:migrate:generate # Runs migrate-auto.sh — pass name (see above)
 
-npm run db:dump            # dbmate schema dump
-npm run db:prisma:format   # Format prisma/schema.prisma
-npm run db:prisma:validate # Validate prisma/schema.prisma
+pnpm run db:dump            # dbmate schema dump
+pnpm run db:prisma:format   # Format prisma/schema.prisma
+pnpm run db:prisma:validate # Validate prisma/schema.prisma
 ```
 
 After changing enums or models used in TypeScript, from the repo root:
 
 ```bash
-npx prisma generate
+pnpm exec prisma generate
 ```
 
 ## See also
