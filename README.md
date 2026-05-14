@@ -105,8 +105,8 @@ Header: `Authorization: Bearer <token>` from login.
 
 ## Scripts
 
-| Command                              | Description                                                     |
-| ------------------------------------ | --------------------------------------------------------------- |
+| Command                               | Description                                                     |
+| ------------------------------------- | --------------------------------------------------------------- |
 | `pnpm run dev`                        | Start dev server (tsx watch)                                    |
 | `pnpm run build`                      | Compile TypeScript                                              |
 | `pnpm run start`                      | Build and run production                                        |
