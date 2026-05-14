@@ -10,11 +10,14 @@ services:
     name: tfg-server
     runtime: node
     plan: free
-    region: frankfurt # Neon está en la UE; cámbialo si tu proyecto Neon usa otra región.
+    region: virginia # Misma región que la BD de Neon (AWS US East 1 / N. Virginia): backend y BD juntos = mínima latencia.
     branch: main
     autoDeploy: true
     healthCheckPath: /health
-    buildCommand: pnpm install --frozen-lockfile && pnpm run build
+    # `--prod=false` es obligatorio: NODE_ENV=production (más abajo) también
+    # aplica durante el build, y haría que pnpm omitiese las devDependencies
+    # (typescript/tsc, prisma, dbmate) que el build y las migraciones necesitan.
+    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm run build
     startCommand: pnpm run db:migrate && node dist/index.js
     envVars:
       - key: NODE_ENV
