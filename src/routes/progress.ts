@@ -3,6 +3,8 @@ import express from 'express';
 import ProgressController from '../controllers/ProgressController';
 import { authentication } from '../middlewares/auth';
 import { ensureSelf } from '../middlewares/ensureSelf';
+import { validateBody } from '../middlewares/validate';
+import { registerWeightSchema } from '../validators/progress';
 
 const router = express.Router();
 
@@ -16,6 +18,7 @@ router.post(
   '/:userId/weight',
   authentication,
   ensureSelf(),
+  validateBody(registerWeightSchema),
   ProgressController.registerWeight
 );
 router.get(

@@ -26,6 +26,7 @@ import {
 } from '../services/classProgression.service';
 import * as statsService from '../services/stats.service';
 import { safeWriteAuditEvent } from '../utils/audit';
+import { sendServerError } from '../utils/httpError';
 import type { ChooseClassBody } from '../validators/character';
 import { AuthRequest } from './UserController';
 
@@ -128,12 +129,8 @@ const CharacterController = {
       );
 
       return res.status(200).json(serializeState(state, statLevels));
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to get character state',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'CharacterController.getState');
     }
   },
 
@@ -183,11 +180,7 @@ const CharacterController = {
       if (err instanceof ChoiceValidationError) {
         return res.status(400).json({ message: err.message, code: err.code });
       }
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to apply class choice',
-        error: error?.message || String(err),
-      });
+      return sendServerError(res, err, 'CharacterController.choose');
     }
   },
 

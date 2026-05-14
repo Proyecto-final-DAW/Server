@@ -1,6 +1,7 @@
 import { Response } from 'express';
 
 import * as progressService from '../services/progress.service';
+import { sendServerError } from '../utils/httpError';
 import { AuthRequest } from './UserController';
 
 const WEIGHT_KG_MIN = 20;
@@ -52,12 +53,8 @@ const ProgressController = {
         before: parsedBefore,
       });
       return res.status(200).json(history);
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to get weight history',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'ProgressController.getWeightHistory');
     }
   },
 
@@ -94,12 +91,8 @@ const ProgressController = {
         entryDate
       );
       return res.status(201).json(entry);
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to register weight',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'ProgressController.registerWeight');
     }
   },
 
@@ -120,12 +113,12 @@ const ProgressController = {
         exerciseId.trim()
       );
       return res.status(200).json(history);
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to get exercise history',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(
+        res,
+        err,
+        'ProgressController.getExerciseMaxHistory'
+      );
     }
   },
 
@@ -138,12 +131,12 @@ const ProgressController = {
 
       const exercises = await progressService.getPerformedExercises(userId);
       return res.status(200).json(exercises);
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to get performed exercises',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(
+        res,
+        err,
+        'ProgressController.getPerformedExercises'
+      );
     }
   },
 };

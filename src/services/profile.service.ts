@@ -23,6 +23,7 @@ const ALLOWED_PROFILE_FIELDS: Record<string, FieldSpec> = {
   equipment: { column: 'equipment', cast: '"Equipment"[]' },
   days_per_week: { column: 'days_per_week' },
   injuries: { column: 'injuries', cast: '"Injury"[]' },
+  injury_notes: { column: 'injury_notes' },
 };
 
 const MACRO_TRIGGER_FIELDS = [
@@ -40,9 +41,42 @@ function throwCoded(message: string, code: string): never {
   throw err;
 }
 
+// Explicit column list for the user payload the profile screen needs.
+// Skips `hashed_password` and `tokens` so they never leave the DB
+// (the previous `SELECT *` then JS-strip pattern paid the
+// serialization cost on every render and risked accidental leak if a
+// future caller dropped the strip).
+const PROFILE_USER_COLUMNS = [
+  'id',
+  'name',
+  'email',
+  'birth_date',
+  'sex',
+  'weight',
+  'height',
+  'age',
+  'activity_level',
+  'experience_level',
+  'goals',
+  'equipment',
+  'days_per_week',
+  'injuries',
+  'injury_notes',
+  'sleep_hours',
+  'daily_calories',
+  'protein_grams',
+  'fat_grams',
+  'carb_grams',
+  'onboarding_completed',
+  'created_at',
+  'updated_at',
+].join(', ');
+
 export async function getProfileSummary(userId: number) {
   const [userResult, statsResult, sessionsResult] = await Promise.all([
-    pool.query('SELECT * FROM users WHERE id = $1', [userId]),
+    pool.query(`SELECT ${PROFILE_USER_COLUMNS} FROM users WHERE id = $1`, [
+      userId,
+    ]),
     pool.query('SELECT streak, best_streak FROM stats WHERE user_id = $1', [
       userId,
     ]),
@@ -96,54 +130,71 @@ export async function updateProfile(
   const setClause = setParts.join(', ');
   const idPlaceholder = values.length + 1;
 
-  const result = await pool.query(
-    `UPDATE users SET ${setClause}, updated_at = NOW() WHERE id = $${idPlaceholder} RETURNING *`,
-    [...values, userId]
-  );
+  // Single transaction so the metadata UPDATE and the derived-macros
+  // UPDATE either both commit or both roll back. The earlier two-call
+  // version could leave a user with the new weight saved but stale
+  // macros if the calc threw — exactly the inconsistency the
+  // onboarding fix was meant to prevent.
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
 
-  if (!result.rows[0]) {
-    throwCoded('USER_NOT_FOUND', 'USER_NOT_FOUND');
-  }
-
-  const updatedUser = normalizeUserRow(
-    result.rows[0] as Record<string, unknown>
-  );
-
-  const needsRecalc = updatedColumns.some((f) =>
-    MACRO_TRIGGER_FIELDS.includes(f)
-  );
-  const inputs = needsRecalc ? resolveMacroInputs(updatedUser) : null;
-  if (inputs) {
-    const macros = calculateCalories(
-      inputs.weightKg,
-      inputs.heightCm,
-      inputs.age,
-      inputs.sex,
-      inputs.activityFactor,
-      inputs.goal
+    const result = await client.query(
+      `UPDATE users SET ${setClause}, updated_at = NOW() WHERE id = $${idPlaceholder} RETURNING *`,
+      [...values, userId]
     );
 
-    const macroResult = await pool.query(
-      `UPDATE users SET daily_calories = $1, protein_grams = $2, fat_grams = $3, carb_grams = $4, updated_at = NOW()
-       WHERE id = $5 RETURNING *`,
-      [
-        macros.daily_calories,
-        macros.protein_grams,
-        macros.fat_grams,
-        macros.carb_grams,
-        userId,
-      ]
+    if (!result.rows[0]) {
+      throwCoded('USER_NOT_FOUND', 'USER_NOT_FOUND');
+    }
+
+    const updatedUser = normalizeUserRow(
+      result.rows[0] as Record<string, unknown>
     );
 
-    const macroRow = normalizeUserRow(
-      macroResult.rows[0] as Record<string, unknown>
+    const needsRecalc = updatedColumns.some((f) =>
+      MACRO_TRIGGER_FIELDS.includes(f)
     );
-    const { hashed_password: _, tokens: __, ...publicUser } = macroRow;
+    const inputs = needsRecalc ? resolveMacroInputs(updatedUser) : null;
+    if (inputs) {
+      const macros = calculateCalories(
+        inputs.weightKg,
+        inputs.heightCm,
+        inputs.age,
+        inputs.sex,
+        inputs.activityFactor,
+        inputs.goal
+      );
+
+      const macroResult = await client.query(
+        `UPDATE users SET daily_calories = $1, protein_grams = $2, fat_grams = $3, carb_grams = $4, updated_at = NOW()
+         WHERE id = $5 RETURNING *`,
+        [
+          macros.daily_calories,
+          macros.protein_grams,
+          macros.fat_grams,
+          macros.carb_grams,
+          userId,
+        ]
+      );
+
+      await client.query('COMMIT');
+      const macroRow = normalizeUserRow(
+        macroResult.rows[0] as Record<string, unknown>
+      );
+      const { hashed_password: _, tokens: __, ...publicUser } = macroRow;
+      return publicUser as UserPublic;
+    }
+
+    await client.query('COMMIT');
+    const { hashed_password: _, tokens: __, ...publicUser } = updatedUser;
     return publicUser as UserPublic;
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
   }
-
-  const { hashed_password: _, tokens: __, ...publicUser } = updatedUser;
-  return publicUser as UserPublic;
 }
 
 export async function changePassword(
@@ -168,7 +219,10 @@ export async function changePassword(
     throwCoded('INVALID_PASSWORD', 'INVALID_PASSWORD');
   }
 
-  if (newPassword.length < 6) {
+  // Aligned with `validators/auth.ts` register schema: a user must not
+  // be able to set a weaker password via change-password than they
+  // could during signup.
+  if (newPassword.length < 8) {
     throwCoded('PASSWORD_TOO_SHORT', 'PASSWORD_TOO_SHORT');
   }
 

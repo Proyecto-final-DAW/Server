@@ -13,25 +13,24 @@ const prettierConfig = JSON.parse(
 );
 
 export default [
+  // Global ignores must live in a config object that has *only* the
+  // `ignores` key — flat config treats those as universal exclusions.
+  // The previous shape co-located `ignores` next to `files` / `rules`,
+  // which flat-config interprets as a per-block filter, so a stale
+  // `dist/` tree on a developer machine still emitted "Unused
+  // eslint-disable" warnings even though the dir is gitignored.
   {
     ignores: [
-      '**/node_modules/**',
-      '**/dist/**',
-      '**/build/**',
-      '**/coverage/**',
-      '**/*.min.js',
-      '**/*.bundle.js',
+      'node_modules/**',
+      'dist/**',
+      'build/**',
+      'coverage/**',
+      '*.min.js',
+      '*.bundle.js',
     ],
   },
   {
     files: ['src/**/*.{js,jsx,ts,tsx}'],
-    ignores: [
-      'vite.config.ts',
-      'tsconfig.json',
-      'tsconfig.app.json',
-      'tsconfig.node.json',
-      'eslint.config.mjs',
-    ],
     languageOptions: {
       parser: tsParser,
       parserOptions: {

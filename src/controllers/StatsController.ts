@@ -1,6 +1,7 @@
 import { Response } from 'express';
 
 import * as statsService from '../services/stats.service';
+import { sendServerError } from '../utils/httpError';
 import { AuthRequest } from './UserController';
 
 const StatsController = {
@@ -19,103 +20,16 @@ const StatsController = {
       }
 
       return res.status(200).json(stats);
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to get stats',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'StatsController.getStats');
     }
   },
 
-  async updateStats(req: AuthRequest, res: Response) {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ message: 'Not authorized' });
-      }
-
-      const allowedFields = [
-        'strength',
-        'endurance',
-        'stamina',
-        'agility',
-        'tenacity',
-        'vigor',
-        'strength_level',
-        'endurance_level',
-        'stamina_level',
-        'agility_level',
-        'tenacity_level',
-        'vigor_level',
-      ];
-
-      const data = req.body as Record<string, unknown>;
-      const filtered: Record<string, unknown> = {};
-      for (const key of Object.keys(data)) {
-        if (allowedFields.includes(key)) {
-          filtered[key] = data[key];
-        }
-      }
-
-      if (Object.keys(filtered).length === 0) {
-        return res.status(400).json({ message: 'No valid fields to update' });
-      }
-
-      const updated = await statsService.updateStats(userId, filtered);
-      if (!updated) {
-        return res
-          .status(404)
-          .json({ message: 'Stats not found. Complete onboarding first.' });
-      }
-
-      return res.status(200).json(updated);
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to update stats',
-        error: error?.message || String(err),
-      });
-    }
-  },
-
-  async registerSession(req: AuthRequest, res: Response) {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ message: 'Not authorized' });
-      }
-
-      const { session_date } = req.body as { session_date?: string };
-      const date = session_date ? new Date(session_date) : undefined;
-
-      if (date && isNaN(date.getTime())) {
-        return res
-          .status(400)
-          .json({ message: 'Invalid session_date format. Use YYYY-MM-DD.' });
-      }
-
-      const result = await statsService.registerSession(userId, date);
-      if (!result) {
-        return res
-          .status(404)
-          .json({ message: 'Stats not found. Complete onboarding first.' });
-      }
-
-      return res.status(200).json({
-        streak: result.stats.streak,
-        best_streak: result.stats.best_streak,
-        last_session_date: result.stats.last_session_date,
-        changed: result.changed,
-      });
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to register session',
-        error: error?.message || String(err),
-      });
-    }
-  },
+  // `updateStats` controller method removed alongside its route. Stats
+  // are derived data and only move through session.service.processSession
+  // and diet.service.logDietForToday — both of which call the
+  // statsService.updateStats helper directly with vetted deltas.
+  // Exposing a public PUT was a self-promote-to-Maestro-Supremo hole.
 
   async initStats(req: AuthRequest, res: Response) {
     try {
@@ -131,12 +45,34 @@ const StatsController = {
 
       const stats = await statsService.createStats(userId);
       return res.status(201).json(stats);
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to initialize stats',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'StatsController.initStats');
+    }
+  },
+
+  /**
+   * GET /stats/history — chronological per-session level snapshots.
+   * Powers the /progress radar's time selector ("AHORA / HACE 7D /
+   * HACE 30D / INICIO"); replayed from the session table because the
+   * stored stat values aren't time-stamped per save.
+   */
+  async getHistory(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: 'Not authorized' });
+      }
+      const limitRaw = req.query.limit;
+      const limit =
+        typeof limitRaw === 'string' ? parseInt(limitRaw, 10) : undefined;
+      const safeLimit =
+        limit !== undefined && Number.isFinite(limit) && limit > 0
+          ? Math.min(500, limit)
+          : 200;
+      const history = await statsService.getStatHistory(userId, safeLimit);
+      return res.status(200).json(history);
+    } catch (err) {
+      return sendServerError(res, err, 'StatsController.getHistory');
     }
   },
 };

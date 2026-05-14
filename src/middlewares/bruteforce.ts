@@ -54,7 +54,11 @@ export const loginBruteforceProtection = [
       skipSuccessfulRequests: true,
       requestWasSuccessful: (_req: Request, res: Response) =>
         res.statusCode < 400,
-      message: { message: 'Too many login attempts. Try again later.' },
+      message: {
+        code: 'TOO_MANY_LOGIN_ATTEMPTS',
+        message:
+          'Demasiados intentos desde tu red. Espera unos minutos y vuelve a intentarlo.',
+      },
     });
   })(),
   (() => {
@@ -72,10 +76,44 @@ export const loginBruteforceProtection = [
         const ip = req.ip ?? req.socket.remoteAddress ?? '0.0.0.0';
         return `ip:${ipKeyGenerator(ip)}`;
       },
-      message: { message: 'Too many login attempts. Try again later.' },
+      message: {
+        code: 'TOO_MANY_LOGIN_ATTEMPTS',
+        message:
+          'Demasiados intentos para esta cuenta. Espera unos minutos y vuelve a intentarlo.',
+      },
     });
   })(),
 ];
+
+/**
+ * Anti-bruteforce middleware for `PUT /profile/me/password`.
+ *
+ * An attacker who has stolen a JWT (XSS, shoulder-surf) can otherwise
+ * grind `currentPassword` guesses at the global limiter rate and take
+ * the account over permanently (change-password rotates `tokens`,
+ * which logs the real owner out everywhere). Keying on the
+ * authenticated user id (not IP) so a coordinated multi-IP attack on
+ * a single account still shares one quota.
+ */
+export const changePasswordBruteforceProtection = rateLimit({
+  windowMs: parseMs(process.env.AUTH_CHANGE_PASSWORD_WINDOW_MS, 15 * 60_000),
+  limit: parsePositiveInt(process.env.AUTH_CHANGE_PASSWORD_MAX, 5),
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Only failed attempts count — a successful rotation shouldn't lock
+  // the user out of further legitimate rotations.
+  skipSuccessfulRequests: true,
+  requestWasSuccessful: (_req: Request, res: Response) => res.statusCode < 400,
+  keyGenerator: (req: Request) => {
+    const userId = (req as Request & { user?: { id: number } }).user?.id;
+    if (typeof userId === 'number') return `user:${userId}`;
+    const ip = req.ip ?? req.socket.remoteAddress ?? '0.0.0.0';
+    return `ip:${ipKeyGenerator(ip)}`;
+  },
+  message: {
+    message: 'Demasiados intentos de cambio de contraseña. Vuelve mas tarde.',
+  },
+});
 
 export const registerBruteforceProtection = [
   (() => {
@@ -84,7 +122,11 @@ export const registerBruteforceProtection = [
       limit: parsePositiveInt(process.env.AUTH_REGISTER_MAX_PER_IP, 10),
       standardHeaders: true,
       legacyHeaders: false,
-      message: { message: 'Too many registration attempts. Try again later.' },
+      message: {
+        code: 'TOO_MANY_REGISTER_ATTEMPTS',
+        message:
+          'Demasiados intentos de registro. Espera unos minutos y vuelve a intentarlo.',
+      },
     });
   })(),
   (() => {
@@ -99,7 +141,11 @@ export const registerBruteforceProtection = [
         const ip = req.ip ?? req.socket.remoteAddress ?? '0.0.0.0';
         return `ip:${ipKeyGenerator(ip)}`;
       },
-      message: { message: 'Too many registration attempts. Try again later.' },
+      message: {
+        code: 'TOO_MANY_REGISTER_ATTEMPTS',
+        message:
+          'Demasiados intentos de registro. Espera unos minutos y vuelve a intentarlo.',
+      },
     });
   })(),
 ];

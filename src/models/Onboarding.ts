@@ -21,11 +21,13 @@ export interface OnboardingFormData {
   birthDate: string;
   weight: string;
   height: string;
-  sex?: 'MALE' | 'FEMALE';
+  sex?: 'MALE' | 'FEMALE' | 'NON_BINARY';
   activityLevel?: ActivityLevel;
   goals?: Goal[];
   experienceLevel?: ExperienceLevel;
   equipment?: Equipment[];
   daysPerWeek?: DaysPerWeek;
   injuries?: Injury[];
+  /** Free-text detail surfaced by the wizard when 'OTHER' is among `injuries`. */
+  injuryNotes?: string;
 }

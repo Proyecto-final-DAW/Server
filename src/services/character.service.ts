@@ -169,7 +169,7 @@ export const findOrCreateByUserId = async (
     await client.query('COMMIT');
     return row;
   } catch (err) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => undefined);
     throw err;
   } finally {
     client.release();
@@ -286,7 +286,7 @@ export const evaluateAfterStatsUpdate = async (
 
     return { state: next, promotedTiers: evaluation.autoTierUpgrades };
   } catch (err) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => undefined);
     throw err;
   } finally {
     client.release();
@@ -387,7 +387,7 @@ export const applyChoice = async (
 
     return { state: final, promotedTiers: evaluation.autoTierUpgrades };
   } catch (err) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => undefined);
     throw err;
   } finally {
     client.release();

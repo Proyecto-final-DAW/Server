@@ -2,6 +2,7 @@ import { Response } from 'express';
 
 import { calculateCalories } from '../services/macros.service';
 import * as userService from '../services/user.service';
+import { sendServerError } from '../utils/httpError';
 import type { CalculateMacrosBody } from '../validators/macros';
 import { AuthRequest } from './UserController';
 
@@ -49,15 +50,11 @@ const MacrosController = {
       }
 
       return res.status(200).json({ targets });
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
+    } catch (err) {
       if (err instanceof RangeError) {
         return res.status(400).json({ message: err.message });
       }
-      return res.status(500).json({
-        message: 'Failed to calculate macros',
-        error: error?.message || String(err),
-      });
+      return sendServerError(res, err, 'MacrosController.calculate');
     }
   },
 };

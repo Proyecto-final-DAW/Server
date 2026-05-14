@@ -4,11 +4,10 @@ import { UserPublic } from '../models/User';
 import { hashIdentifier } from '../services/audit.service';
 import * as authService from '../services/auth.service';
 import * as cardsService from '../services/cards.service';
-import * as milestonesService from '../services/milestone.service';
 import * as statsService from '../services/stats.service';
-import { getTip } from '../services/tips.service';
 import * as userService from '../services/user.service';
 import { safeWriteAuditEvent } from '../utils/audit';
+import { sendServerError } from '../utils/httpError';
 import { sleepJitterMs } from '../utils/sleep';
 import type { LoginBody, RegisterBody } from '../validators/auth';
 
@@ -41,8 +40,16 @@ const UserController = {
     } catch (err: unknown) {
       const error = err as Error & { code?: string };
 
-      // Enumeration protection: do not confirm whether the email exists.
-      // Postgres unique violation = 23505 (e.g. duplicate email).
+      // Postgres unique violation = 23505 (duplicate email). Previously
+      // we returned an opaque 202 to hide whether an email is in use,
+      // but pairing that with the client's auto-login-after-register
+      // meant a returning user typing creds into the *register* form
+      // would silently sign in to their existing account — confusing
+      // at best, and at worst a UX channel for accidental account
+      // takeover if someone reused a known email + guessed password.
+      // For a fitness app, surfacing "ese email ya existe" is the
+      // right tradeoff: account enumeration here doesn't unlock
+      // anything an attacker couldn't try via the login endpoint.
       if (error.code === '23505') {
         await sleepJitterMs(150, 300);
         await safeWriteAuditEvent(req, {
@@ -59,7 +66,10 @@ const UserController = {
             ),
           },
         });
-        return res.status(202).json({ message: 'Registration processed' });
+        return res.status(409).json({
+          message: 'Ese email ya esta registrado. Inicia sesion en su lugar.',
+          code: 'EMAIL_ALREADY_REGISTERED',
+        });
       }
       await safeWriteAuditEvent(req, {
         action: 'AUTH_REGISTER_FAILED',
@@ -72,10 +82,7 @@ const UserController = {
           reason: error?.code ?? 'UNKNOWN',
         },
       });
-      return res.status(500).json({
-        message: 'Registration failed',
-        error: error?.message || String(err),
-      });
+      return sendServerError(res, err, 'UserController.register');
     }
   },
 
@@ -120,7 +127,17 @@ const UserController = {
             ),
           },
         });
-        return res.status(401).json({ message: 'Invalid email or password' });
+        // Personalized Spanish copy + a stable `code` so the client
+        // can branch on the kind of error (display vs redirect, etc).
+        // Single message for both "no such email" and "wrong password"
+        // so account enumeration via login is impossible — the
+        // surface for that is the register endpoint, which has its
+        // own audited 409 path.
+        return res.status(401).json({
+          code: 'INVALID_CREDENTIALS',
+          message:
+            'Email o contraseña incorrectos. Revisa los datos y vuelve a intentarlo.',
+        });
       }
       await safeWriteAuditEvent(req, {
         action: 'AUTH_LOGIN_FAILED',
@@ -133,10 +150,7 @@ const UserController = {
           reason: error?.code ?? 'UNKNOWN',
         },
       });
-      return res.status(500).json({
-        message: 'Login failed',
-        error: error?.message || String(err),
-      });
+      return sendServerError(res, err, 'UserController.login');
     }
   },
 
@@ -196,46 +210,7 @@ const UserController = {
           reason: error?.code ?? 'UNKNOWN',
         },
       });
-      return res.status(500).json({
-        message: 'Logout failed',
-        error: error?.message || String(err),
-      });
-    }
-  },
-
-  async getTip(req: AuthRequest, res: Response) {
-    try {
-      if (!req.user?.id || !req.user.created_at) {
-        return res.status(401).json({ message: 'Not authorized' });
-      }
-
-      const userId = req.user.id;
-
-      const stats = await statsService.findByUserId(userId);
-      const milestones = await milestonesService.findUnlockedByUser(userId);
-
-      let lastMilestoneAt: Date | null = null;
-
-      if (milestones.length > 0) {
-        lastMilestoneAt = milestones
-          .map((m) => m.unlocked_at)
-          .sort((a, b) => b.getTime() - a.getTime())[0];
-      }
-
-      const streak = stats?.streak ?? null;
-
-      const tip = getTip({
-        created_at: new Date(req.user.created_at),
-        last_session_at: stats?.last_session_date
-          ? new Date(stats.last_session_date)
-          : null,
-        last_milestone_at: lastMilestoneAt,
-        streak,
-      });
-
-      return res.status(200).json(tip);
-    } catch {
-      return res.status(500).json({ message: 'Failed to get tips' });
+      return sendServerError(res, err, 'UserController.logout');
     }
   },
 
@@ -248,12 +223,8 @@ const UserController = {
 
       const cards = await cardsService.getCards(userId);
       return res.status(200).json(cards);
-    } catch (err: unknown) {
-      const error = err as Error;
-      return res.status(500).json({
-        message: 'Failed to get cards',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'UserController.getCards');
     }
   },
 
@@ -272,12 +243,41 @@ const UserController = {
       }
 
       return res.status(200).json(stats);
-    } catch (err: unknown) {
-      const error = err as Error;
-      return res.status(500).json({
-        message: 'Failed to get stats',
-        error: error?.message || String(err),
+    } catch (err) {
+      return sendServerError(res, err, 'UserController.getStatsForCurrentUser');
+    }
+  },
+
+  /**
+   * DELETE /users/me — GDPR-compliant account deletion. The `users`
+   * row has `onDelete: Cascade` on every owned table (sessions,
+   * routines, stats, weight_logs, user_class_state, user_milestones),
+   * so removing the row also cleans up everything the user produced.
+   * Audit log entries are *not* cascaded because the `actor_user_id` /
+   * `target_user_id` columns are SET NULL — keeping the trail intact
+   * for security review while honouring the deletion request.
+   */
+  async deleteMe(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: 'Not authorized' });
+      }
+
+      await safeWriteAuditEvent(req, {
+        action: 'ACCOUNT_DELETED',
+        actorUserId: userId,
+        targetUserId: userId,
+        requestId: (req as unknown as { id?: string }).id ?? null,
+        ip: req.ip,
+        userAgent: req.headers['user-agent'] ?? null,
       });
+
+      await userService.deleteUser(userId);
+
+      return res.status(200).json({ message: 'Account deleted' });
+    } catch (err) {
+      return sendServerError(res, err, 'UserController.deleteMe');
     }
   },
 };

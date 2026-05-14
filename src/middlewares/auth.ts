@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 
 import { User } from '../models/User';
 import * as userService from '../services/user.service';
+import { sendServerError } from '../utils/httpError';
 
 interface JwtPayload {
   userId: number;
@@ -17,8 +18,21 @@ interface JwtError extends Error {
     | 'SyntaxError';
 }
 
+/**
+ * Bypass auth for local development WITHOUT requiring a JWT.
+ *
+ * Gated on BOTH `NODE_ENV === 'development'` AND an explicit
+ * `LOCAL_DEV_AUTH_BYPASS=1` env var. The double gate is intentional:
+ * `NODE_ENV` is easy to get wrong (a missing render.yaml entry,
+ * certain Docker base images don't set it, etc), so a single check
+ * would silently log every request in as user 1 if the env was
+ * misconfigured. Production deploys must never satisfy both conditions.
+ */
 function isLocalDevAuthBypass(): boolean {
-  return process.env.NODE_ENV === 'development';
+  return (
+    process.env.NODE_ENV === 'development' &&
+    process.env.LOCAL_DEV_AUTH_BYPASS === '1'
+  );
 }
 
 function bearerToken(header: string | undefined): string | undefined {
@@ -61,7 +75,13 @@ export const authentication = async (
     }
 
     const jwtSecret = process.env.JWT_SECRET as string;
-    const payload = jwt.verify(token, jwtSecret) as JwtPayload;
+    // Explicit algorithm allowlist (defense-in-depth). jsonwebtoken@9
+    // rejects `alg:none` by default, but pinning to HS256 prevents
+    // algorithm-confusion attacks if the secret is ever exposed via a
+    // route that accepts public-key-shaped material.
+    const payload = jwt.verify(token, jwtSecret, {
+      algorithms: ['HS256'],
+    }) as JwtPayload;
 
     const user = await userService.findById(payload.userId);
     if (!user) {
@@ -89,16 +109,8 @@ export const authentication = async (
           return res.status(401).json({ message: 'Token not yet valid' });
         case 'SyntaxError':
           return res.status(401).json({ message: 'Malformed token' });
-        default:
-          return res.status(500).json({
-            message: 'Authentication error',
-            error: err?.message || String(error),
-          });
       }
     }
-    return res.status(500).json({
-      message: 'Unknown token error',
-      error: String(error),
-    });
+    return sendServerError(res, error, 'auth.authentication');
   }
 };

@@ -7,18 +7,53 @@ const exerciseTypeSchema = z.enum([
   'stretch',
 ]);
 
+const cardioIntensitySchema = z.enum(['LOW', 'MEDIUM', 'HIGH']);
+
+// Realistic upper bounds on a logged set. The DB stores `weight` as
+// `numeric(6, 2)` which already rejects values >= 10000, but we want
+// to fail fast with a clean Zod message instead of leaking a Postgres
+// "value out of range" 500. 1000 reps and 1000 kg are both well above
+// what any human can record yet small enough to flag a typo or a
+// tampering attempt — and crucially, they prevent a single absurd set
+// from inflating `total_weight` (used for milestone unlocks) by 10^9.
+const MAX_REPS_PER_SET = 1000;
+const MAX_WEIGHT_KG_PER_SET = 1000;
+
 const setSchema = z
   .object({
     reps: z
       .number()
       .int('reps must be an integer')
-      .positive('reps must be greater than 0'),
+      .nonnegative('reps must be 0 or more')
+      .max(MAX_REPS_PER_SET, `reps must be at most ${MAX_REPS_PER_SET}`),
     weight: z
       .number()
       .nonnegative('weight must be 0 or more')
+      .max(
+        MAX_WEIGHT_KG_PER_SET,
+        `weight must be at most ${MAX_WEIGHT_KG_PER_SET} kg`
+      )
       .finite('weight must be finite'),
+    /**
+     * Hold time for stretch / mobility sets. Optional — stays absent
+     * for cadence-based sets (strength, bodyweight reps). When set,
+     * `reps` is allowed to be 0 (zero-rep stretch is the normal case).
+     */
+    duration_seconds: z
+      .number()
+      .int('duration_seconds must be an integer')
+      .positive('duration_seconds must be greater than 0')
+      .max(3600, 'duration_seconds must be at most 3600')
+      .optional(),
   })
-  .strict();
+  .strict()
+  // A set must have either reps > 0 or a duration. Both can be present
+  // (some mobility moves count holds in reps too) but neither can be
+  // absent — an empty set entry is meaningless.
+  .refine((data) => data.reps > 0 || data.duration_seconds !== undefined, {
+    message: 'each set must have reps > 0 or a duration',
+    path: ['reps'],
+  });
 
 const exerciseSchema = z
   .object({
@@ -31,20 +66,80 @@ const exerciseSchema = z
       .min(1, 'name is required')
       .max(200, 'name must be at most 200 characters'),
     type: exerciseTypeSchema,
-    sets: z.array(setSchema).min(1, 'each exercise must have at least one set'),
+    // Cap at 50 sets/exercise — well above any realistic workout (a
+    // German Volume Training session is 10×10 = 100 sets total across
+    // an entire workout, not per exercise).
+    sets: z
+      .array(setSchema)
+      .max(50, 'sets array must contain at most 50 entries'),
+    /** Cardio metadata — present only on post-workout cardio entries. */
+    duration_minutes: z
+      .number()
+      .int('duration_minutes must be an integer')
+      .positive('duration_minutes must be greater than 0')
+      .max(600, 'duration_minutes must be at most 600')
+      .optional(),
+    intensity: cardioIntensitySchema.optional(),
+    distance_km: z
+      .number()
+      .nonnegative('distance_km must be 0 or more')
+      .max(1000, 'distance_km must be at most 1000')
+      .finite('distance_km must be finite')
+      .optional(),
   })
-  .strict();
+  .strict()
+  // Strength entries must carry at least one set; cardio entries must
+  // carry a duration. An empty record (no sets, no duration) is rejected.
+  .refine(
+    (data) => data.sets.length > 0 || data.duration_minutes !== undefined,
+    {
+      message: 'each exercise must have at least one set or a duration',
+      path: ['sets'],
+    }
+  )
+  // Intensity only makes sense with a duration; surface a clear error
+  // rather than silently ignore a stray field.
+  .refine(
+    (data) =>
+      data.intensity === undefined || data.duration_minutes !== undefined,
+    {
+      message: 'intensity requires duration_minutes',
+      path: ['intensity'],
+    }
+  );
 
 /**
  * Body for `POST /sessions`. Date is a calendar day (YYYY-MM-DD) in the user's
  * local timezone. `routine_id` is optional and may be null when the session
  * is freeform.
  */
+// Hard caps on exercise + sets array length. The DB request body is
+// already capped at 100kb, but a malicious client can pack ~1000+ tiny
+// entries within that budget — easy to exceed Postgres' 65535-parameter
+// limit on the bulk INSERT. Real workouts don't approach these numbers.
+const MAX_EXERCISES_PER_SESSION = 50;
+
 export const createSessionSchema = z
   .object({
     date: z
       .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be in YYYY-MM-DD format'),
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be in YYYY-MM-DD format')
+      // Reject future dates. Without this, an API client posting
+      // `{"date":"2099-12-31"}` was accepted, the row landed in
+      // `sessions`, and the count fed TOTAL_SESSIONS milestones.
+      .refine(
+        (v) => {
+          const today = new Date();
+          // Compare YYYY-MM-DD strings directly. Server-local "today"
+          // is fine here — backdating is allowed, only the future
+          // edge needs gating.
+          const todayStr = `${today.getFullYear()}-${String(
+            today.getMonth() + 1
+          ).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+          return v <= todayStr;
+        },
+        { message: 'date cannot be in the future' }
+      ),
     routine_id: z
       .number()
       .int('routine_id must be an integer')
@@ -53,7 +148,11 @@ export const createSessionSchema = z
       .optional(),
     exercises: z
       .array(exerciseSchema)
-      .min(1, 'exercises array is required and cannot be empty'),
+      .min(1, 'exercises array is required and cannot be empty')
+      .max(
+        MAX_EXERCISES_PER_SESSION,
+        `exercises array must contain at most ${MAX_EXERCISES_PER_SESSION} entries`
+      ),
   })
   .strict();
 

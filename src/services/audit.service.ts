@@ -12,7 +12,8 @@ export type AuditAction =
   | 'PROFILE_CHANGE_PASSWORD_SUCCESS'
   | 'PROFILE_CHANGE_PASSWORD_FAILED'
   | 'CHARACTER_CLASS_CHOSEN'
-  | 'CHARACTER_TIER_AUTO_PROMOTED';
+  | 'CHARACTER_TIER_AUTO_PROMOTED'
+  | 'ACCOUNT_DELETED';
 
 export interface AuditEventInput {
   action: AuditAction;

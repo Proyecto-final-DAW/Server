@@ -2,9 +2,22 @@ import { Response } from 'express';
 
 import { RoutineExercise } from '../models/Routine';
 import * as routineService from '../services/routine.service';
+import { sendServerError } from '../utils/httpError';
 import { AuthRequest } from './UserController';
 
 type RoutineExerciseInput = Omit<RoutineExercise, 'id' | 'routine_id'>;
+
+// Schema bounds. The DB caps `name` at varchar(100) and
+// `exercise_name` at varchar(200); enforcing these in the controller
+// turns "value too long for type" 500s into clean 400s. The exercises
+// cap is a DoS guard: with no upper bound, any authenticated user can
+// post a 100kB body of exercise objects and tie up the routine row
+// lock + the bulk-insert for seconds. 100 is well above any
+// legitimate use (the longest realistic split is ~12 lifts/day).
+const MAX_ROUTINE_NAME_LEN = 100;
+const MAX_ROUTINE_DESC_LEN = 2000;
+const MAX_ROUTINE_EXERCISES = 100;
+const MAX_EXERCISE_NAME_LEN = 200;
 
 const isValidRoutineExercise = (
   unknownExercise: unknown
@@ -15,13 +28,16 @@ const isValidRoutineExercise = (
   const sets = exerciseRecord.sets;
   const reps = exerciseRecord.reps;
   const orderIndex = exerciseRecord.order_index;
+  const exerciseName = exerciseRecord.exercise_name;
 
   return (
     typeof exerciseRecord.exercise_api_id === 'string' &&
     exerciseRecord.exercise_api_id.trim().length > 0 &&
-    (exerciseRecord.exercise_name === undefined ||
-      exerciseRecord.exercise_name === null ||
-      typeof exerciseRecord.exercise_name === 'string') &&
+    exerciseRecord.exercise_api_id.length <= MAX_EXERCISE_NAME_LEN &&
+    (exerciseName === undefined ||
+      exerciseName === null ||
+      (typeof exerciseName === 'string' &&
+        exerciseName.length <= MAX_EXERCISE_NAME_LEN)) &&
     (sets === undefined ||
       sets === null ||
       (typeof sets === 'number' && Number.isInteger(sets) && sets > 0)) &&
@@ -54,12 +70,8 @@ const RoutineController = {
       // wrapping it in an envelope object on zero routines breaks any
       // client that does `response.map(...)` on the result.
       return res.status(200).json(routines);
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to get routines',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'RoutineController.getAll');
     }
   },
 
@@ -83,12 +95,8 @@ const RoutineController = {
       }
 
       return res.status(200).json(routine);
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to get routine',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'RoutineController.getById');
     }
   },
 
@@ -108,9 +116,32 @@ const RoutineController = {
       if (!name?.trim()) {
         return res.status(400).json({ message: 'Name is required' });
       }
+      if (name.length > MAX_ROUTINE_NAME_LEN) {
+        return res.status(400).json({
+          message: `Name must be at most ${MAX_ROUTINE_NAME_LEN} characters`,
+        });
+      }
+      if (description !== undefined && description !== null) {
+        if (typeof description !== 'string') {
+          return res
+            .status(400)
+            .json({ message: 'Description must be a string' });
+        }
+        if (description.length > MAX_ROUTINE_DESC_LEN) {
+          return res.status(400).json({
+            message: `Description must be at most ${MAX_ROUTINE_DESC_LEN} characters`,
+          });
+        }
+      }
 
       if (!Array.isArray(exercises)) {
         return res.status(400).json({ message: 'Exercises must be an array' });
+      }
+
+      if (exercises.length > MAX_ROUTINE_EXERCISES) {
+        return res.status(400).json({
+          message: `A routine can hold at most ${MAX_ROUTINE_EXERCISES} exercises`,
+        });
       }
 
       if (!exercises.every(isValidRoutineExercise)) {
@@ -127,12 +158,8 @@ const RoutineController = {
       });
 
       return res.status(201).json(routine);
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to create routine',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'RoutineController.create');
     }
   },
 
@@ -156,8 +183,28 @@ const RoutineController = {
         exercises?: unknown[];
       };
 
-      if (name !== undefined && !name.trim()) {
-        return res.status(400).json({ message: 'Name cannot be empty' });
+      if (name !== undefined) {
+        if (!name.trim()) {
+          return res.status(400).json({ message: 'Name cannot be empty' });
+        }
+        if (name.length > MAX_ROUTINE_NAME_LEN) {
+          return res.status(400).json({
+            message: `Name must be at most ${MAX_ROUTINE_NAME_LEN} characters`,
+          });
+        }
+      }
+
+      if (description !== undefined && description !== null) {
+        if (typeof description !== 'string') {
+          return res
+            .status(400)
+            .json({ message: 'Description must be a string' });
+        }
+        if (description.length > MAX_ROUTINE_DESC_LEN) {
+          return res.status(400).json({
+            message: `Description must be at most ${MAX_ROUTINE_DESC_LEN} characters`,
+          });
+        }
       }
 
       if (exercises !== undefined) {
@@ -165,6 +212,11 @@ const RoutineController = {
           return res
             .status(400)
             .json({ message: 'Exercises must be an array' });
+        }
+        if (exercises.length > MAX_ROUTINE_EXERCISES) {
+          return res.status(400).json({
+            message: `A routine can hold at most ${MAX_ROUTINE_EXERCISES} exercises`,
+          });
         }
         if (!exercises.every(isValidRoutineExercise)) {
           return res.status(400).json({
@@ -190,12 +242,8 @@ const RoutineController = {
       }
 
       return res.status(200).json(updated);
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to update routine',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'RoutineController.update');
     }
   },
 
@@ -219,12 +267,8 @@ const RoutineController = {
       }
 
       return res.status(200).json({ message: 'Routine deleted' });
-    } catch (err: unknown) {
-      const error = err as Error & { code?: string };
-      return res.status(500).json({
-        message: 'Failed to delete routine',
-        error: error?.message || String(err),
-      });
+    } catch (err) {
+      return sendServerError(res, err, 'RoutineController.remove');
     }
   },
 };

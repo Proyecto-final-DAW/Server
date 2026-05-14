@@ -40,9 +40,13 @@ export interface StatLevels {
 }
 
 export const heroLevel = (stats: StatLevels): number => {
-  // The display caps at 100 once every stat is maxed at 99 (sum/6 rounds to 99).
-  const allMaxed = STAT_KEYS.every((key) => stats[key] >= 99);
-  if (allMaxed) return 100;
+  // Hero level = average of the six stat levels, rounded. With every
+  // stat at the cap (99), the average is 99 — which matches the rule
+  // the user established that the level ceiling is 99. The earlier
+  // pass bumped the display to 100 in the all-maxed case as a
+  // "decorative apex", but it contradicted the no-stat-above-99 rule
+  // and made the badge read "LVL 100" while the stat panel showed
+  // every pillar capped at 99.
   const sum = STAT_KEYS.reduce((acc, key) => acc + stats[key], 0);
   return Math.round(sum / STAT_KEYS.length);
 };

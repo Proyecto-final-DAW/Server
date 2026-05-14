@@ -1,4 +1,5 @@
 import type { Goal, Sex } from '@prisma/client';
+import jwt from 'jsonwebtoken';
 
 import pool from '../db/pool';
 import { calculateCalories } from './macros.service';
@@ -32,6 +33,24 @@ function parsePgEnumArray(value: unknown): string[] {
   });
 }
 
+/** Columns whose pg type is `numeric`/`decimal`. node-pg serialises
+ *  these as JS strings (preserving precision); the rest of the
+ *  codebase expects numbers, and a string-vs-number compare like
+ *  `Number(form.weight) !== profile.weight` is silently always true,
+ *  which made every profile save retransmit weight/height (and
+ *  trigger an unnecessary macro recompute downstream). */
+const NUMERIC_USER_FIELDS = ['weight', 'height'] as const;
+
+function coerceNumericField(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
 export function normalizeUserRow<T extends Record<string, unknown> | undefined>(
   row: T
 ): T {
@@ -49,6 +68,11 @@ export function normalizeUserRow<T extends Record<string, unknown> | undefined>(
     (out as Record<string, unknown>).equipment = parsePgEnumArray(
       out.equipment
     );
+  }
+  for (const field of NUMERIC_USER_FIELDS) {
+    if (field in out) {
+      (out as Record<string, unknown>)[field] = coerceNumericField(out[field]);
+    }
   }
   return out;
 }
@@ -126,20 +150,79 @@ export const updateUserMacroTargets = async (
   return normalizeUserRow(result.rows[0]);
 };
 
+/**
+ * Maximum tokens kept per user. Each successful login appends a JWT;
+ * without a cap the column grows unbounded (one row per logged-in
+ * device that never explicitly logged out / refreshed). 10 covers
+ * "phone + tablet + desktop + a few stale browsers" comfortably.
+ */
+const MAX_TOKENS_PER_USER = 10;
+
 export const addToken = async (userId: number, token: string) => {
-  const result = await pool.query(
-    'UPDATE users SET tokens = array_append(tokens, $1) WHERE id = $2 RETURNING tokens',
-    [token, userId]
-  );
-  return result.rows[0]?.tokens || [];
+  // Read-modify-write the `tokens` array atomically under a row lock.
+  // Without this, two parallel logins from the same user (phone +
+  // tablet within ~1s) both read the same `previous` array, both push
+  // their own token, and the second writer silently drops the first
+  // device's token — symptom from the user is "I logged in but it
+  // keeps logging me out." `SELECT … FOR UPDATE` serialises the two
+  // calls so each sees the other's append.
+  const jwtSecret = process.env.JWT_SECRET as string;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const current = await client.query<{ tokens: string[] | null }>(
+      'SELECT tokens FROM users WHERE id = $1 FOR UPDATE',
+      [userId]
+    );
+    const previous = current.rows[0]?.tokens ?? [];
+    const valid = previous.filter((t) => {
+      try {
+        // Same HS256 allowlist as the auth middleware — keeps the prune
+        // step honest even if jsonwebtoken's defaults ever change.
+        jwt.verify(t, jwtSecret, { algorithms: ['HS256'] });
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    const next = [...valid, token].slice(-MAX_TOKENS_PER_USER);
+
+    const result = await client.query(
+      'UPDATE users SET tokens = $1::text[] WHERE id = $2 RETURNING tokens',
+      [next, userId]
+    );
+    await client.query('COMMIT');
+    return result.rows[0]?.tokens || [];
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
+  }
 };
 
-export const removeToken = async (userId: number, token: string) => {
-  const result = await pool.query(
-    'UPDATE users SET tokens = array_remove(tokens, $1) WHERE id = $2 RETURNING *',
+/**
+ * Hard-delete the user. FK cascades on sessions / routines / stats /
+ * weight_logs / user_class_state / user_milestones do the cleanup
+ * automatically; audit_logs SET NULL on actor/target so the security
+ * trail survives the GDPR request.
+ */
+export const deleteUser = async (userId: number): Promise<void> => {
+  await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+};
+
+export const removeToken = async (
+  userId: number,
+  token: string
+): Promise<{ id: number } | null> => {
+  // Only the existence of an updated row is needed (logout uses it as
+  // a truthiness check). Returning `*` shipped the entire user row
+  // back through the controller; trimming to `id` cuts the wire size.
+  const result = await pool.query<{ id: number }>(
+    'UPDATE users SET tokens = array_remove(tokens, $1) WHERE id = $2 RETURNING id',
     [token, userId]
   );
-  return normalizeUserRow(result.rows[0]);
+  return result.rows[0] ?? null;
 };
 
 export const hasToken = async (

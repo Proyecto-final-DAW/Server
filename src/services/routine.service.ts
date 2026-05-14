@@ -1,5 +1,17 @@
 import pool from '../db/pool';
 import type { RoutineExercise } from '../models/Routine';
+import { getExerciseMetaById } from './exercise.service';
+
+/**
+ * Pulls `category` and `equipment` out of the bundled catalog and
+ * stamps them onto the routine_exercises row. The columns aren't
+ * persisted (the catalog is the source of truth and would drift
+ * silently if duplicated), so the join happens here at read time.
+ */
+const hydrateRoutineExercise = (row: RoutineExercise): RoutineExercise => {
+  const meta = getExerciseMetaById(row.exercise_api_id);
+  return { ...row, category: meta.category, equipment: meta.equipment };
+};
 
 export interface CreateRoutineInput {
   name: string;
@@ -27,7 +39,7 @@ const getAllExercisesByRoutineIds = async (routineIds: number[]) => {
   const map = new Map<number, RoutineExercise[]>();
   for (const row of result.rows as RoutineExercise[]) {
     const arr = map.get(row.routine_id) ?? [];
-    arr.push(row);
+    arr.push(hydrateRoutineExercise(row));
     map.set(row.routine_id, arr);
   }
   return map;
@@ -80,7 +92,9 @@ export const getById = async (userId: number, routineId: number) => {
 
   return {
     ...routine,
-    exercises: exercisesResult.rows,
+    exercises: (exercisesResult.rows as RoutineExercise[]).map(
+      hydrateRoutineExercise
+    ),
   };
 };
 
@@ -134,7 +148,7 @@ export const create = async (userId: number, input: CreateRoutineInput) => {
     await client.query('COMMIT');
     return await getById(userId, routine.id);
   } catch (e) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => undefined);
     throw e;
   } finally {
     client.release();
@@ -150,13 +164,19 @@ export const update = async (
   try {
     await client.query('BEGIN');
 
-    // Ensure ownership exists
+    // Lock the routine row for the duration of the transaction. Two
+    // concurrent updates from the same user (two tabs editing the
+    // same routine) used to both DELETE all `routine_exercises` then
+    // re-INSERT, interleaving rows from two different states and
+    // leaving a routine that was half of edit A and half of edit B.
+    // FOR UPDATE serialises them — second writer waits for first to
+    // COMMIT, then runs against the post-write state.
     const exists = await client.query(
-      `SELECT id FROM routines WHERE id = $1 AND user_id = $2`,
+      `SELECT id FROM routines WHERE id = $1 AND user_id = $2 FOR UPDATE`,
       [routineId, userId]
     );
     if (exists.rowCount === 0) {
-      await client.query('ROLLBACK');
+      await client.query('ROLLBACK').catch(() => undefined);
       return null;
     }
 
@@ -167,10 +187,15 @@ export const update = async (
     const fields = Object.keys(data);
     const values = Object.values(data);
 
-    if (fields.length > 0) {
-      const setClause = fields
-        .map((field, i) => `${field} = $${i + 1}`)
-        .join(', ');
+    // Always bump updated_at, even when the diff is "exercises only" —
+    // the listing query orders by updated_at DESC and an exercise-only
+    // edit (the most common case) used to never resurface to the top.
+    // Coalesce both branches into a single UPDATE so the routine row
+    // touches updated_at even if the metadata fields didn't change.
+    if (fields.length > 0 || input.exercises !== undefined) {
+      const setParts = fields.map((field, i) => `${field} = $${i + 1}`);
+      setParts.push('updated_at = NOW()');
+      const setClause = setParts.join(', ');
 
       await client.query(
         `UPDATE routines
@@ -216,7 +241,7 @@ export const update = async (
     await client.query('COMMIT');
     return await getById(userId, routineId);
   } catch (e) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => undefined);
     throw e;
   } finally {
     client.release();

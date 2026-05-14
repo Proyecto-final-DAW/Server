@@ -23,6 +23,7 @@ export interface User {
   equipment?: Equipment[];
   days_per_week?: string | null;
   injuries?: Injury[];
+  injury_notes?: string | null;
   sleep_hours?: number;
   daily_calories?: number;
   protein_grams?: number;

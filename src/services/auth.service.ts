@@ -5,7 +5,19 @@ import { UserPublic } from '../models/User';
 import * as userService from './user.service';
 
 const SALT_ROUNDS = 10;
-const DUMMY_PASSWORD_HASH = bcrypt.hashSync('not-the-password', SALT_ROUNDS);
+
+// Lazy hash so the cold-start cost (10 bcrypt rounds ≈ 50-80ms) is
+// paid on the first failed-email login, not every module load. The
+// previous module-level `bcrypt.hashSync` ran on every server boot
+// even though the value is only used to make the "no such email"
+// branch take the same wall-clock as a real bcrypt compare.
+let dummyPasswordHashCache: string | null = null;
+const getDummyPasswordHash = (): string => {
+  if (dummyPasswordHashCache === null) {
+    dummyPasswordHashCache = bcrypt.hashSync('not-the-password', SALT_ROUNDS);
+  }
+  return dummyPasswordHashCache;
+};
 
 interface RegisterBody {
   name: string;
@@ -65,7 +77,7 @@ export async function register(
 
 export async function login(data: LoginBody): Promise<LoginResponse> {
   const user = await userService.findByEmail(data.email);
-  const hashToCompare = user?.hashed_password ?? DUMMY_PASSWORD_HASH;
+  const hashToCompare = user?.hashed_password ?? getDummyPasswordHash();
   const isPasswordValid = await bcrypt.compare(data.password, hashToCompare);
   if (!user || !isPasswordValid) {
     const err = new Error('INVALID_CREDENTIALS');
