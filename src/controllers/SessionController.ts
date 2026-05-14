@@ -7,6 +7,7 @@ import {
   ExerciseType,
 } from '../models/Session';
 import * as sessionService from '../services/session.service';
+import { logger } from '../utils/logger';
 import { AuthRequest } from './UserController';
 
 const VALID_TYPES: ExerciseType[] = [
@@ -137,8 +138,39 @@ const SessionController = {
         limit: limit !== undefined && !Number.isNaN(limit) ? limit : undefined,
       });
       return res.status(200).json(result);
-    } catch {
+    } catch (err) {
+      logger.error({ err, userId: req.user?.id }, 'Failed to fetch sessions');
       return res.status(500).json({ message: 'Failed to fetch sessions' });
+    }
+  },
+
+  async getHistory(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: 'Not authorized' });
+      }
+
+      const pageRaw = req.query.page;
+      const limitRaw = req.query.limit;
+      const page =
+        typeof pageRaw === 'string' ? parseInt(pageRaw, 10) : undefined;
+      const limit =
+        typeof limitRaw === 'string' ? parseInt(limitRaw, 10) : undefined;
+
+      const result = await sessionService.getUserSessions(userId, {
+        page: page !== undefined && !Number.isNaN(page) ? page : undefined,
+        limit: limit !== undefined && !Number.isNaN(limit) ? limit : undefined,
+      });
+      return res.status(200).json(result);
+    } catch (err) {
+      logger.error(
+        { err, userId: req.user?.id },
+        'Failed to fetch session history'
+      );
+      return res
+        .status(500)
+        .json({ message: 'Failed to fetch session history' });
     }
   },
 
@@ -160,7 +192,11 @@ const SessionController = {
       }
 
       return res.status(200).json(session);
-    } catch {
+    } catch (err) {
+      logger.error(
+        { err, userId: req.user?.id, sessionId: req.params.sessionId },
+        'Failed to fetch session detail'
+      );
       return res
         .status(500)
         .json({ message: 'Failed to fetch session detail' });

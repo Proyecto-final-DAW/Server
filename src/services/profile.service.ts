@@ -18,12 +18,18 @@ const ALLOWED_PROFILE_FIELDS: Record<string, FieldSpec> = {
   activity_level: { column: 'activity_level' },
   goals: { column: 'goals', cast: '"Goal"[]' },
   sleep_hours: { column: 'sleep_hours' },
+  sex: { column: 'sex', cast: '"Sex"' },
+  experience_level: { column: 'experience_level', cast: '"ExperienceLevel"' },
+  equipment: { column: 'equipment', cast: '"Equipment"[]' },
+  days_per_week: { column: 'days_per_week' },
+  injuries: { column: 'injuries', cast: '"Injury"[]' },
 };
 
 const MACRO_TRIGGER_FIELDS = [
   'weight',
   'height',
   'age',
+  'sex',
   'activity_level',
   'goals',
 ];

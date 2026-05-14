@@ -1,7 +1,13 @@
-const EXERCISEDB_BASE_URL = 'https://exercisedb.p.rapidapi.com';
+// Bundled at build-time via `resolveJsonModule`. tsc copies the JSON next
+// to the compiled output, esbuild (used by Netlify Functions) inlines it
+// into the bundle. Either way the dataset is part of the deployed artifact
+// and there is no runtime path resolution to get wrong.
+import datasetRaw from '../data/exercises.json';
 
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
-const DEFAULT_LIMIT = 4;
+const FREE_EXERCISE_DB_BASE =
+  'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
+
+const DEFAULT_LIMIT = 9;
 
 export interface Exercise {
   id: string;
@@ -12,146 +18,87 @@ export interface Exercise {
   imageUrl: string;
 }
 
-interface CacheEntry {
-  data: Exercise[];
-  timestamp: number;
+interface RawEntry {
+  id: string;
+  name: string;
+  primaryMuscles?: string[];
+  equipment?: string | null;
+  level?: string;
+  images?: string[];
 }
 
-const cache = new Map<string, CacheEntry>();
-
-const getCached = (key: string): Exercise[] | null => {
-  const entry = cache.get(key);
-  if (!entry) return null;
-  if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
-    cache.delete(key);
-    return null;
-  }
-  return entry.data;
+// The client filter dropdown still uses the legacy ExerciseDB muscle
+// vocabulary (pectorals, delts, abs, quads). free-exercise-db's
+// `primaryMuscles` uses chest / shoulders / abdominals / quadriceps —
+// translate at the boundary so the client doesn't need to change. Identity
+// entries (e.g. `traps: 'traps'`) are kept explicit so renaming a value
+// upstream doesn't silently fall through the lookup.
+const MUSCLE_ALIASES: Record<string, string> = {
+  pectorals: 'chest',
+  chest: 'chest',
+  delts: 'shoulders',
+  shoulders: 'shoulders',
+  abs: 'abdominals',
+  abdominals: 'abdominals',
+  quads: 'quadriceps',
+  quadriceps: 'quadriceps',
+  lats: 'lats',
+  biceps: 'biceps',
+  triceps: 'triceps',
+  forearms: 'forearms',
+  hamstrings: 'hamstrings',
+  glutes: 'glutes',
+  calves: 'calves',
+  traps: 'traps',
 };
 
-const setCache = (key: string, data: Exercise[]): void => {
-  cache.set(key, { data, timestamp: Date.now() });
+const rawDataset = datasetRaw as unknown as RawEntry[];
+
+const dataset: Exercise[] = rawDataset.map((entry) => ({
+  // upstream guarantees `id` in practice, but defending against a missing
+  // value avoids silent ID collisions if the dataset format ever drifts.
+  id: entry.id ?? entry.name,
+  name: entry.name,
+  target: entry.primaryMuscles?.[0] ?? '',
+  // Preserve "no equipment specified" as empty so the UI can render a dash
+  // or hide the chip. ~77 of 873 entries (stretches, isometric holds) are
+  // legitimately equipment-less; defaulting to 'body only' would mislabel
+  // them as bodyweight exercises.
+  equipment: entry.equipment ?? '',
+  difficulty: entry.level ?? 'beginner',
+  imageUrl: entry.images?.[0]
+    ? `${FREE_EXERCISE_DB_BASE}${entry.images[0]}`
+    : '',
+}));
+
+const matchesSearch = (exercise: Exercise, search: string): boolean =>
+  exercise.name.toLowerCase().includes(search.toLowerCase());
+
+const matchesMuscle = (exercise: Exercise, muscle: string): boolean => {
+  const target = (MUSCLE_ALIASES[muscle.toLowerCase()] ?? muscle).toLowerCase();
+  return exercise.target.toLowerCase() === target;
 };
 
-const mapExercises = (data: Record<string, unknown>[]): Exercise[] =>
-  data.map((e) => ({
-    id: e.id as string,
-    name: e.name as string,
-    target: e.target as string,
-    equipment: e.equipment as string,
-    difficulty: e.difficulty as string,
-    imageUrl: `/exercises/image/${e.id as string}`,
-  }));
+const filterExercises = (search?: string, muscle?: string): Exercise[] =>
+  dataset.filter(
+    (exercise) =>
+      (!search || matchesSearch(exercise, search)) &&
+      (!muscle || matchesMuscle(exercise, muscle))
+  );
 
-const fetchFromExerciseDB = async (url: string): Promise<Exercise[]> => {
-  const cached = getCached(url);
-  if (cached) return cached;
-
-  const headers = {
-    'x-rapidapi-key': process.env.EXERCISEDB_API_KEY ?? '',
-    'x-rapidapi-host': 'exercisedb.p.rapidapi.com',
-  };
-
-  const response = await fetch(url, { headers });
-
-  if (!response.ok) {
-    throw new Error(`ExerciseDB error: ${response.status}`);
-  }
-
-  const data = (await response.json()) as Record<string, unknown>[];
-  const exercises = mapExercises(data);
-  setCache(url, exercises);
-  return exercises;
-};
-
-const paginate = (
-  exercises: Exercise[],
-  page: number,
-  limit: number
-): { data: Exercise[]; total: number } => {
-  const offset = (page - 1) * limit;
-  return {
-    data: exercises.slice(offset, offset + limit),
-    total: exercises.length,
-  };
-};
-
-type SearchType = 'both' | 'muscle' | 'search' | 'none';
-
-const getSearchType = (search?: string, muscle?: string): SearchType => {
-  switch (true) {
-    case !!muscle && !!search:
-      return 'both';
-    case !!muscle:
-      return 'muscle';
-    case !!search:
-      return 'search';
-    default:
-      return 'none';
-  }
-};
-
-const fetchExercises = async (
-  type: SearchType,
-  search: string | undefined,
-  muscle: string | undefined,
-  fetchLimit: number
-): Promise<Exercise[]> => {
-  switch (type) {
-    case 'both': {
-      const [byMuscle, byName] = await Promise.all([
-        fetchFromExerciseDB(
-          `${EXERCISEDB_BASE_URL}/exercises/target/${encodeURIComponent(muscle!)}?limit=${fetchLimit}`
-        ),
-        fetchFromExerciseDB(
-          `${EXERCISEDB_BASE_URL}/exercises/name/${encodeURIComponent(search!)}?limit=${fetchLimit}`
-        ),
-      ]);
-      const muscleIds = new Set(byMuscle.map((e) => e.id));
-      return byName.filter((e) => muscleIds.has(e.id));
-    }
-    case 'muscle':
-      return fetchFromExerciseDB(
-        `${EXERCISEDB_BASE_URL}/exercises/target/${encodeURIComponent(muscle!)}?limit=${fetchLimit}`
-      );
-    case 'search':
-      return fetchFromExerciseDB(
-        `${EXERCISEDB_BASE_URL}/exercises/name/${encodeURIComponent(search!)}?limit=${fetchLimit}`
-      );
-    case 'none':
-      return fetchFromExerciseDB(
-        `${EXERCISEDB_BASE_URL}/exercises?limit=${fetchLimit}`
-      );
-  }
-};
-
-export const searchExercises = async (
+// Synchronous because the dataset lives in memory — no I/O. Kept as a free
+// function (not async) so the controller's call site is honest about there
+// being no pending Promise to await.
+export const searchExercises = (
   search?: string,
   muscle?: string,
   page = 1,
   limit = DEFAULT_LIMIT
-): Promise<{ data: Exercise[]; total: number }> => {
-  const fetchLimit = Math.max(limit * page, 50);
-  const type = getSearchType(search, muscle);
-  const exercises = await fetchExercises(type, search, muscle, fetchLimit);
-  return paginate(exercises, page, limit);
-};
-
-export const getExerciseImage = async (exerciseId: string): Promise<Buffer> => {
-  const apiKey = process.env.EXERCISEDB_API_KEY ?? '';
-  const url = `${EXERCISEDB_BASE_URL}/image?exerciseId=${encodeURIComponent(exerciseId)}&resolution=180&rapidapi-key=${apiKey}`;
-
-  const response = await fetch(url, {
-    headers: {
-      'x-rapidapi-key': apiKey,
-      'x-rapidapi-host': 'exercisedb.p.rapidapi.com',
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`ExerciseDB image error: ${response.status}`);
-  }
-
-  const arrayBuffer = await response.arrayBuffer();
-  return Buffer.from(arrayBuffer);
+): { data: Exercise[]; total: number } => {
+  const filtered = filterExercises(search, muscle);
+  const offset = (page - 1) * limit;
+  return {
+    data: filtered.slice(offset, offset + limit),
+    total: filtered.length,
+  };
 };

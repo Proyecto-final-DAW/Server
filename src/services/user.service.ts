@@ -45,6 +45,11 @@ export function normalizeUserRow<T extends Record<string, unknown> | undefined>(
   if ('injuries' in out) {
     (out as Record<string, unknown>).injuries = parsePgEnumArray(out.injuries);
   }
+  if ('equipment' in out) {
+    (out as Record<string, unknown>).equipment = parsePgEnumArray(
+      out.equipment
+    );
+  }
   return out;
 }
 
@@ -74,19 +79,6 @@ export const findById = async (id: number) => {
   return normalizeUserRow(result.rows[0]);
 };
 
-export const updateUser = async (id: number, data: Record<string, unknown>) => {
-  const fields = Object.keys(data);
-  const values = Object.values(data);
-
-  const setClause = fields.map((field, i) => `${field} = $${i + 1}`).join(', ');
-
-  const result = await pool.query(
-    `UPDATE users SET ${setClause} WHERE id = $${fields.length + 1} RETURNING *`,
-    [...values, id]
-  );
-  return normalizeUserRow(result.rows[0]);
-};
-
 export interface NutritionProfileInput {
   weightKg: number;
   heightCm: number;
@@ -96,7 +88,12 @@ export interface NutritionProfileInput {
   goal: Goal;
 }
 
-/** Persists `daily_calories`, `protein_grams`, `fat_grams`, and `carb_grams` from profile inputs. */
+/**
+ * Persists `daily_calories`, `protein_grams`, `fat_grams`, and `carb_grams`
+ * from profile inputs. SQL is hardcoded (no dynamic column interpolation)
+ * — general profile mutations live in `profile.service.updateProfile`,
+ * which has its own column allowlist.
+ */
 export const updateUserMacroTargets = async (
   userId: number,
   input: NutritionProfileInput
@@ -109,12 +106,24 @@ export const updateUserMacroTargets = async (
     input.activityFactor,
     input.goal
   );
-  return updateUser(userId, {
-    daily_calories: macros.daily_calories,
-    protein_grams: macros.protein_grams,
-    fat_grams: macros.fat_grams,
-    carb_grams: macros.carb_grams,
-  });
+  const result = await pool.query(
+    `UPDATE users
+        SET daily_calories = $1,
+            protein_grams  = $2,
+            fat_grams      = $3,
+            carb_grams     = $4,
+            updated_at     = NOW()
+      WHERE id = $5
+      RETURNING *`,
+    [
+      macros.daily_calories,
+      macros.protein_grams,
+      macros.fat_grams,
+      macros.carb_grams,
+      userId,
+    ]
+  );
+  return normalizeUserRow(result.rows[0]);
 };
 
 export const addToken = async (userId: number, token: string) => {

@@ -1,4 +1,6 @@
 import pool from '../db/pool';
+import { resolveMacroInputs } from '../utils/macroProfile';
+import { calculateCalories } from './macros.service';
 
 export interface WeightEntry {
   date: string;
@@ -8,6 +10,12 @@ export interface WeightEntry {
 export interface ExerciseMaxEntry {
   date: string;
   max_weight: number;
+  reps: number;
+}
+
+export interface PerformedExerciseEntry {
+  id: string;
+  name: string;
 }
 
 export interface WeightHistoryOptions {
@@ -64,10 +72,44 @@ export const registerWeight = async (
       [userId, weight, isoDate]
     );
 
-    await client.query(
-      `UPDATE users SET weight = $1, updated_at = NOW() WHERE id = $2`,
+    const updatedUserResult = await client.query(
+      `UPDATE users
+          SET weight = $1,
+              updated_at = NOW()
+        WHERE id = $2
+        RETURNING *`,
       [weight, userId]
     );
+
+    const macroInputs = resolveMacroInputs(updatedUserResult.rows[0]);
+
+    if (macroInputs) {
+      const macros = calculateCalories(
+        macroInputs.weightKg,
+        macroInputs.heightCm,
+        macroInputs.age,
+        macroInputs.sex,
+        macroInputs.activityFactor,
+        macroInputs.goal
+      );
+
+      await client.query(
+        `UPDATE users
+            SET daily_calories = $1,
+                protein_grams  = $2,
+                carb_grams     = $3,
+                fat_grams      = $4,
+                updated_at     = NOW()
+          WHERE id = $5`,
+        [
+          macros.daily_calories,
+          macros.protein_grams,
+          macros.carb_grams,
+          macros.fat_grams,
+          userId,
+        ]
+      );
+    }
 
     await client.query('COMMIT');
     return inserted.rows[0];
@@ -80,30 +122,61 @@ export const registerWeight = async (
 };
 
 /**
- * Returns the maximum weight lifted for a given exercise, grouped by local day.
- * `timezone` is an IANA name (e.g. 'Europe/Madrid'); defaults to UTC.
- * Sessions' `created_at` is stored as UTC timestamp without tz, so we
- * stamp it as UTC before converting.
+ * Returns, per training day, the heaviest set logged for a given exercise.
+ * Reads from the normalized session tables (sessions ⨝ session_exercises ⨝ exercise_sets).
+ * `sessions.date` is a DATE column already in the user's local day, so no timezone math is needed.
  */
 export const getExerciseMaxHistory = async (
   userId: number,
-  exerciseId: string,
-  timezone = 'UTC'
+  exerciseId: string
 ): Promise<ExerciseMaxEntry[]> => {
   const result = await pool.query(
-    `SELECT TO_CHAR(
-              (s.created_at AT TIME ZONE 'UTC' AT TIME ZONE $3)::date,
-              'YYYY-MM-DD'
-            ) AS date,
-            MAX((set_elem->>'weight')::numeric)::float AS max_weight
-       FROM sessions s,
-            jsonb_array_elements(s.exercises::jsonb) AS ex_elem,
-            jsonb_array_elements(ex_elem->'sets') AS set_elem
-      WHERE s.user_id = $1
-        AND ex_elem->>'exerciseId' = $2
-      GROUP BY (s.created_at AT TIME ZONE 'UTC' AT TIME ZONE $3)::date
-      ORDER BY (s.created_at AT TIME ZONE 'UTC' AT TIME ZONE $3)::date ASC`,
-    [userId, exerciseId, timezone]
+    `WITH ranked AS (
+       SELECT s.date,
+              es.weight::float AS weight,
+              es.reps,
+              ROW_NUMBER() OVER (
+                PARTITION BY s.date
+                ORDER BY es.weight DESC, es.reps DESC
+              ) AS rn
+         FROM sessions s
+         JOIN session_exercises se ON se.session_id = s.id
+         JOIN exercise_sets es ON es.session_exercise_id = se.id
+        WHERE s.user_id = $1
+          AND se.exercise_api_id = $2
+     )
+     SELECT TO_CHAR(date, 'YYYY-MM-DD') AS date,
+            weight AS max_weight,
+            reps
+       FROM ranked
+      WHERE rn = 1
+      ORDER BY date ASC`,
+    [userId, exerciseId]
+  );
+  return result.rows;
+};
+
+/**
+ * Returns the distinct exercises the user has logged at least once,
+ * ordered by most recently performed first.
+ */
+export const getPerformedExercises = async (
+  userId: number
+): Promise<PerformedExerciseEntry[]> => {
+  const result = await pool.query(
+    `SELECT id, name
+       FROM (
+         SELECT DISTINCT ON (se.exercise_api_id)
+                se.exercise_api_id AS id,
+                se.name,
+                s.date AS last_date
+           FROM session_exercises se
+           JOIN sessions s ON s.id = se.session_id
+          WHERE s.user_id = $1
+          ORDER BY se.exercise_api_id, s.date DESC, s.id DESC
+       ) latest
+      ORDER BY last_date DESC, id ASC`,
+    [userId]
   );
   return result.rows;
 };

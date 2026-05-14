@@ -24,5 +24,11 @@ router.get(
   ensureSelf(),
   ProgressController.getExerciseMaxHistory
 );
+router.get(
+  '/:userId/exercises-performed',
+  authentication,
+  ensureSelf(),
+  ProgressController.getPerformedExercises
+);
 
 export default router;

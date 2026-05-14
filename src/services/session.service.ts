@@ -6,6 +6,8 @@ import type {
   Session,
   SessionExercise,
 } from '../models/Session';
+import { logger } from '../utils/logger';
+import * as characterService from './character.service';
 import * as milestoneService from './milestone.service';
 import { applyGains, calculateGains } from './progression.service';
 import * as statsService from './stats.service';
@@ -461,6 +463,23 @@ export const processSession = async (
     last_session_date: lastSessionDate,
   });
 
+  // Evaluate character class progression. Non-critical; never fail the session.
+  try {
+    await characterService.evaluateAfterStatsUpdate(userId, {
+      strength: updatedStats.strength_level,
+      endurance: updatedStats.endurance_level,
+      stamina: updatedStats.stamina_level,
+      agility: updatedStats.agility_level,
+      tenacity: updatedStats.tenacity_level,
+      vigor: updatedStats.vigor_level,
+    });
+  } catch (err) {
+    logger.warn(
+      { err, userId },
+      'Character progression evaluation failed after session save'
+    );
+  }
+
   let newMilestones: UnlockedMilestone[] = [];
   try {
     const [totalSessions, totalWeight] = await Promise.all([
@@ -486,8 +505,9 @@ export const processSession = async (
     ]);
 
     newMilestones = milestoneChecks.flat();
-  } catch {
-    // Milestone check failed — session and stats are already saved
+  } catch (err) {
+    // Milestone check failed — session and stats are already saved.
+    logger.warn({ err, userId }, 'Milestone check failed after session save');
   }
 
   return { session, stats: updatedStats, newMilestones };

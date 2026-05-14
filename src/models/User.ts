@@ -20,7 +20,7 @@ export interface User {
   activity_level?: string;
   goals?: Goal[];
   experience_level?: ExperienceLevel | null;
-  equipment?: Equipment | null;
+  equipment?: Equipment[];
   days_per_week?: string | null;
   injuries?: Injury[];
   sleep_hours?: number;

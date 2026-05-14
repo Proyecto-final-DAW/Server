@@ -10,6 +10,7 @@ import {
 import { ensureSelf } from '../middlewares/ensureSelf';
 import { validateBody } from '../middlewares/validate';
 import { loginSchema, registerSchema } from '../validators/auth';
+import { calculateMacrosSchema } from '../validators/macros';
 
 const router = express.Router();
 
@@ -28,10 +29,14 @@ router.post(
 );
 router.post('/auth/logout', authentication, UserController.logout);
 
+router.get('/cards', authentication, UserController.getCards);
+router.get('/stats', authentication, UserController.getStatsForCurrentUser);
+
 router.post(
   '/:userId/macros/calculate',
   authentication,
   ensureSelf(),
+  validateBody(calculateMacrosSchema),
   MacrosController.calculate
 );
 

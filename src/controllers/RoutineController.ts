@@ -50,12 +50,9 @@ const RoutineController = {
       }
 
       const routines = await routineService.getAllByUser(userId);
-      if (routines.length === 0) {
-        return res.status(200).json({
-          message: 'No routines found',
-          routines: [],
-        });
-      }
+      // Always return a bare array. The empty state IS an empty array;
+      // wrapping it in an envelope object on zero routines breaks any
+      // client that does `response.map(...)` on the result.
       return res.status(200).json(routines);
     } catch (err: unknown) {
       const error = err as Error & { code?: string };

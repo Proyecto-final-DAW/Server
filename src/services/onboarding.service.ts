@@ -1,6 +1,8 @@
 import pool from '../db/pool';
 import { OnboardingFormData } from '../models/Onboarding';
 import { UserPublic } from '../models/User';
+import { resolveMacroInputs } from '../utils/macroProfile';
+import { calculateCalories } from './macros.service';
 import { normalizeUserRow } from './user.service';
 
 /** Maps onboarding request fields to `users` columns (single source of truth). */
@@ -29,7 +31,21 @@ function applyFormToUserUpdates(
         }
         case 'birthDate': {
           const date = new Date(String(raw));
-          if (!Number.isNaN(date.getTime())) push('birth_date', date);
+          if (!Number.isNaN(date.getTime())) {
+            push('birth_date', date);
+            // Also persist derived age — many endpoints (diet, dashboard
+            // cards) and the profile view read `age` directly without
+            // recomputing it from `birth_date`. Keeping them in sync at
+            // write-time avoids null age + valid birth_date inconsistency.
+            const today = new Date();
+            let age = today.getUTCFullYear() - date.getUTCFullYear();
+            const hadBirthday =
+              today.getUTCMonth() > date.getUTCMonth() ||
+              (today.getUTCMonth() === date.getUTCMonth() &&
+                today.getUTCDate() >= date.getUTCDate());
+            if (!hadBirthday) age -= 1;
+            if (age >= 0) push('age', age);
+          }
           break;
         }
         case 'weight': {
@@ -56,9 +72,11 @@ function applyFormToUserUpdates(
         case 'experienceLevel':
           push('experience_level', raw, '"ExperienceLevel"');
           break;
-        case 'equipment':
-          push('equipment', raw, '"Equipment"');
+        case 'equipment': {
+          const arr = Array.isArray(raw) ? raw : [];
+          push('equipment', arr, '"Equipment"[]');
           break;
+        }
         case 'daysPerWeek':
           push('days_per_week', raw);
           break;
@@ -110,6 +128,32 @@ export const submitOnboarding = async (
 
   if (result.rows[0]) {
     const row = normalizeUserRow(result.rows[0] as Record<string, unknown>);
+
+    const inputs = resolveMacroInputs(row);
+    if (inputs) {
+      const targets = calculateCalories(
+        inputs.weightKg,
+        inputs.heightCm,
+        inputs.age,
+        inputs.sex,
+        inputs.activityFactor,
+        inputs.goal
+      );
+      await pool.query(
+        `UPDATE users
+            SET daily_calories = $1, protein_grams = $2, fat_grams = $3, carb_grams = $4,
+                updated_at = NOW()
+          WHERE id = $5`,
+        [
+          targets.daily_calories,
+          targets.protein_grams,
+          targets.fat_grams,
+          targets.carb_grams,
+          userId,
+        ]
+      );
+    }
+
     const { hashed_password: _hp, tokens: _tokens, ...user } = row;
     return user as UserPublic;
   }

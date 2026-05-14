@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express, { NextFunction, Request, Response } from 'express';
@@ -8,6 +7,7 @@ import { httpLogger } from './middlewares/httpLogger';
 import { globalRateLimit } from './middlewares/rateLimitGlobal';
 import { sanitizeRequest } from './middlewares/sanitize';
 import { globalSlowdown } from './middlewares/slowdownGlobal';
+import characterRouter from './routes/character';
 import dietRouter from './routes/diet';
 import exercisesRouter from './routes/exercises';
 import milestonesRouter from './routes/milestones';
@@ -17,7 +17,9 @@ import progressRouter from './routes/progress';
 import routinesRouter from './routes/routines';
 import sessionsRouter from './routes/sessions';
 import statsRouter from './routes/stats';
+import streakRouter from './routes/streak';
 import usersRouter from './routes/users';
+import { logger } from './utils/logger';
 
 export function createApp() {
   const nodeEnv = process.env.NODE_ENV || 'development';
@@ -33,7 +35,6 @@ export function createApp() {
     'PORT',
     'CORS_ORIGIN',
     'JWT_EXPIRES_IN',
-    'EXERCISEDB_API_KEY',
   ];
 
   // In Netlify Functions, PORT is not used (there is no long-lived listener).
@@ -69,8 +70,7 @@ export function createApp() {
     .map((o) => o.trim())
     .filter(Boolean);
 
-  console.log(`[env] NODE_ENV=${nodeEnv}`);
-  console.log(`[env] CORS_ORIGIN=${corsOriginEnv}`);
+  logger.info({ nodeEnv, corsOrigin: corsOriginEnv }, 'env loaded');
 
   app.use(
     cors({
@@ -132,6 +132,8 @@ export function createApp() {
   app.use('/progress', progressRouter);
   app.use('/diet', dietRouter);
   app.use('/routines', routinesRouter);
+  app.use('/streak', streakRouter);
+  app.use('/character', characterRouter);
 
   // Payload-too-large handler (body-parser / express.json)
   app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
@@ -147,8 +149,9 @@ export function createApp() {
       };
       const status = maybe.statusCode ?? maybe.status;
       if (status === 413 || maybe.type === 'entity.too.large') {
-        console.warn(
-          `[payload] 413 entity.too.large (json=${requestBodyLimit}, urlencoded=${urlencodedBodyLimit})`
+        logger.warn(
+          { json: requestBodyLimit, urlencoded: urlencodedBodyLimit },
+          'payload too large'
         );
         return res.status(413).json({
           message: 'Payload too large',

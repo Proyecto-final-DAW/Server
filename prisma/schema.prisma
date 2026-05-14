@@ -66,7 +66,7 @@ model User {
   activity_level       String?          @db.VarChar(100)
   goals                Goal[]           @default([])
   experience_level     ExperienceLevel?
-  equipment            Equipment?
+  equipment            Equipment[]      @default([])
   days_per_week        String?          @db.VarChar(10)
   injuries             Injury[]         @default([])
   sleep_hours          Int?
@@ -83,8 +83,9 @@ model User {
   routines        Routine[]
   user_milestones UserMilestone[]
   weight_logs     WeightLog[]
-  audit_as_actor  AuditLog[] @relation("audit_actor")
-  audit_as_target AuditLog[] @relation("audit_target")
+  class_state     UserClassState?
+  audit_as_actor  AuditLog[]      @relation("audit_actor")
+  audit_as_target AuditLog[]      @relation("audit_target")
 
   @@map("users")
 }
@@ -232,16 +233,40 @@ model UserMilestone {
   @@map("user_milestones")
 }
 
+enum ClassTierStage {
+  NORMAL
+  TRANSCENDENT
+}
+
+model UserClassState {
+  user_id                 Int             @id
+  current_tier            Int             @default(0) @db.SmallInt
+  vocation_class_id       String?         @db.VarChar(50)
+  specialization_class_id String?         @db.VarChar(50)
+  legendary_class_id      String?         @db.VarChar(50)
+  legendary_stage         ClassTierStage?
+  is_maestro_supremo      Boolean         @default(false)
+  is_leyenda              Boolean         @default(false)
+  pending_choice_tier     Int?            @db.SmallInt
+  created_at              DateTime        @default(now())
+  updated_at              DateTime        @default(now()) @updatedAt
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([pending_choice_tier])
+  @@map("user_class_state")
+}
+
 model AuditLog {
-  id            Int      @id @default(autoincrement())
-  action        String   @db.Text
-  actor_user_id Int?
+  id             Int      @id @default(autoincrement())
+  action         String   @db.Text
+  actor_user_id  Int?
   target_user_id Int?
-  request_id    String?
-  ip            String?
-  user_agent    String?
-  metadata      Json     @default("{}")
-  created_at    DateTime @default(now())
+  request_id     String?
+  ip             String?
+  user_agent     String?
+  metadata       Json     @default("{}")
+  created_at     DateTime @default(now())
 
   actor_user  User? @relation("audit_actor", fields: [actor_user_id], references: [id], onDelete: SetNull)
   target_user User? @relation("audit_target", fields: [target_user_id], references: [id], onDelete: SetNull)
