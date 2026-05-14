@@ -1,6 +1,5 @@
-// Bundled at build-time via `resolveJsonModule`. tsc copies the JSON next
-// to the compiled output, esbuild (used by Netlify Functions) inlines it
-// into the bundle. Either way the dataset is part of the deployed artifact
+// Bundled at build-time via `resolveJsonModule`: tsc copies the JSON next
+// to the compiled output, so the dataset is part of the deployed artifact
 // and there is no runtime path resolution to get wrong.
 import datasetRaw from '../data/exercises.json';
 

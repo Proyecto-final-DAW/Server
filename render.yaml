@@ -1,0 +1,33 @@
+# Render Blueprint — backend del proyecto (API Express + Postgres).
+#
+# La base de datos vive en Neon (externa a Render): la variable DATABASE_URL
+# se configura a mano en el dashboard de Render (env var con `sync: false`),
+# por eso este blueprint NO declara ningún recurso `databases:`.
+#
+# Render Blueprint spec: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: tfg-server
+    runtime: node
+    plan: free
+    region: frankfurt # Neon está en la UE; cámbialo si tu proyecto Neon usa otra región.
+    branch: main
+    autoDeploy: true
+    healthCheckPath: /health
+    buildCommand: pnpm install --frozen-lockfile && pnpm run build
+    startCommand: pnpm run db:migrate && node dist/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # PORT lo inyecta Render automáticamente — no hace falta declararlo.
+      # TRUST_PROXY tampoco: app.ts detecta `process.env.RENDER` y activa
+      # `trust proxy` solo (necesario para req.ip / rate-limit tras el proxy).
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      # Valores que se rellenan a mano en el dashboard de Render:
+      - key: DATABASE_URL # cadena de conexión de Neon (incluye sslmode=require)
+        sync: false
+      - key: JWT_SECRET # secreto para firmar los JWT
+        sync: false
+      - key: CORS_ORIGIN # origen del front en Vercel, p. ej. https://tu-app.vercel.app
+        sync: false

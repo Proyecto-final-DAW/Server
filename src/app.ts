@@ -37,12 +37,6 @@ export function createApp() {
     'JWT_EXPIRES_IN',
   ];
 
-  // In Netlify Functions, PORT is not used (there is no long-lived listener).
-  if (process.env.NETLIFY) {
-    const portIndex = requiredEnvVars.indexOf('PORT');
-    if (portIndex >= 0) requiredEnvVars.splice(portIndex, 1);
-  }
-
   const missingVars = requiredEnvVars.filter((key) => !process.env[key]);
   if (missingVars.length > 0) {
     throw new Error(
@@ -52,9 +46,10 @@ export function createApp() {
 
   const app = express();
 
-  // Ensure req.ip works correctly behind reverse proxies (e.g. Netlify).
-  // In serverless/proxied deployments, the client IP comes from X-Forwarded-For.
-  if (process.env.NETLIFY || process.env.TRUST_PROXY) {
+  // Ensure req.ip works correctly behind reverse proxies (e.g. Render).
+  // Render sets RENDER=true automatically and routes traffic through its
+  // load balancer, so the real client IP comes from X-Forwarded-For.
+  if (process.env.RENDER || process.env.TRUST_PROXY) {
     const trustProxyRaw = process.env.TRUST_PROXY?.trim();
     const trustProxy =
       trustProxyRaw && trustProxyRaw.length > 0
@@ -93,6 +88,12 @@ export function createApp() {
       crossOriginEmbedderPolicy: false,
     })
   );
+
+  // Lightweight health check for Render. Declared before the logger and the
+  // rate limiters so platform probes are neither logged as noise nor throttled.
+  app.get('/health', (_req: Request, res: Response) => {
+    res.status(200).json({ status: 'ok' });
+  });
 
   app.use(httpLogger);
 
