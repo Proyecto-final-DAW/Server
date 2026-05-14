@@ -91,7 +91,7 @@ ORIGINAL_DATABASE_URL="$DATABASE_URL"
 # Apply Prisma schema directly to temporary DB (desired state)
 echo "📋 Applying schema.prisma to temporary DB (desired state)..."
 export DATABASE_URL="$TEMP_DB_URL"
-npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss || {
+pnpm exec prisma db push --schema=./prisma/schema.prisma --accept-data-loss || {
   echo "❌ Error applying schema from Prisma"
   export DATABASE_URL="$ORIGINAL_DATABASE_URL"
   node scripts/db-helper.mjs drop-db "$TEMP_DB_NAME" 2> /dev/null || true
@@ -128,7 +128,7 @@ fi
 
 # Create new migration with dbmate
 echo "📝 Creating migration: $MIGRATION_NAME..."
-npx dbmate new "$MIGRATION_NAME"
+pnpm exec dbmate new "$MIGRATION_NAME"
 
 MIGRATION_FILE=$(ls -t db/migrations/*${MIGRATION_NAME}*.sql 2> /dev/null | head -1)
 
@@ -275,6 +275,6 @@ echo "📋 migrate:down"
 echo "$DOWN_SQL"
 echo ""
 echo "⚠️  IMPORTANT: Review both sections before applying!"
-echo "💡 Apply with: npm run db:migrate"
+echo "💡 Apply with: pnpm run db:migrate"
 
 node scripts/db-helper.mjs drop-db "$TEMP_DB_NAME" 2> /dev/null || true

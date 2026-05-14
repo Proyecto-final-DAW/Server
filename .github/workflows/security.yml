@@ -25,23 +25,28 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
+          cache: 'pnpm'
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: ESLint
-        run: npm run lint -- --max-warnings=0
+        run: pnpm run lint -- --max-warnings=0
 
       - name: TypeScript
-        run: npx tsc --noEmit
+        run: pnpm exec tsc --noEmit
 
-      - name: NPM audit
-        run: npm audit --audit-level=moderate --omit=dev
+      - name: pnpm audit
+        run: pnpm audit --audit-level moderate --prod
 
       - name: Semgrep
         run: docker run --rm -v "${{ github.workspace }}:/src" -w /src semgrep/semgrep semgrep scan --config=auto
