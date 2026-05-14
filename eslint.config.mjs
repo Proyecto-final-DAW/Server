@@ -14,14 +14,18 @@ const prettierConfig = JSON.parse(
 
 export default [
   {
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/build/**',
+      '**/coverage/**',
+      '**/*.min.js',
+      '**/*.bundle.js',
+    ],
+  },
+  {
     files: ['src/**/*.{js,jsx,ts,tsx}'],
     ignores: [
-      'node_modules',
-      'dist',
-      'build',
-      'coverage',
-      '*.min.js',
-      '*.bundle.js',
       'vite.config.ts',
       'tsconfig.json',
       'tsconfig.app.json',

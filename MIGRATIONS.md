@@ -12,7 +12,7 @@ No `createdb` / `dropdb` CLI tools are required on the host; **`scripts/db-helpe
 
 ## Prerequisites
 
-- **Node / npm** (project)
+- **Node / pnpm** (project)
 - **Prisma 7.x** — connection URL in **`prisma.config.ts`** (`process.env.DATABASE_URL` with a generate-only fallback if unset), not in `schema.prisma`
 - **migra** (Python):
 
@@ -31,18 +31,18 @@ Model your desired tables, columns, enums, etc.
 ### 2. Generate a migration
 
 ```bash
-npm run db:migrate:generate descriptive_name
+pnpm run db:migrate:generate descriptive_name
 ```
 
-If your npm version does not pass extra args to the script, use:
+If your pnpm version does not pass extra args to the script, use:
 
 ```bash
-npm run db:migrate:generate -- descriptive_name
+pnpm run db:migrate:generate -- descriptive_name
 ```
 
 This runs **`scripts/migrate-auto.sh`**, which:
 
-1. Creates a **temporary** database and applies the schema with **`npx prisma db push`** (desired state).
+1. Creates a **temporary** database and applies the schema with **`pnpm exec prisma db push`** (desired state).
 2. Runs **migra** **twice**:
    - **Forward** `migra "$REAL_DB" "$TEMP_DB"` → SQL to move the **real** DB toward the Prisma schema → becomes **`migrate:up`** (after filtering and post-processing).
    - **Reverse** `migra "$TEMP_DB" "$REAL_DB"` → SQL to undo that change → becomes **`migrate:down`** (after filtering and post-processing).
@@ -55,7 +55,7 @@ This runs **`scripts/migrate-auto.sh`**, which:
 
 ```bash
 cat db/migrations/*_descriptive_name.sql # optional
-npm run db:migrate
+pnpm run db:migrate
 ```
 
 Always **read** the generated SQL before applying, especially for enums, data casts, and destructive changes.
@@ -104,17 +104,17 @@ If the reverse migra run produces nothing usable, **`migrate:down`** is a short 
 ## Commands reference
 
 ```bash
-npm run db:migrate          # Apply pending migrations (dbmate up)
-npm run db:migrate:down     # Rollback last migration
-npm run db:migrate:new      # Create an empty migration (manual SQL)
-npm run db:migrate:generate # Run migrate-auto.sh (pass migration name)
+pnpm run db:migrate          # Apply pending migrations (dbmate up)
+pnpm run db:migrate:down     # Rollback last migration
+pnpm run db:migrate:new      # Create an empty migration (manual SQL)
+pnpm run db:migrate:generate # Run migrate-auto.sh (pass migration name)
 
-npm run db:prisma:format   # Format prisma/schema.prisma
-npm run db:prisma:validate # Validate prisma/schema.prisma
-npm run db:dump            # Export current schema (dbmate)
+pnpm run db:prisma:format   # Format prisma/schema.prisma
+pnpm run db:prisma:validate # Validate prisma/schema.prisma
+pnpm run db:dump            # Export current schema (dbmate)
 ```
 
-After changing **`prisma/schema.prisma`** enums or models used in TypeScript, run **`npx prisma generate`** so **`@prisma/client`** stays in sync.
+After changing **`prisma/schema.prisma`** enums or models used in TypeScript, run **`pnpm exec prisma generate`** so **`@prisma/client`** stays in sync.
 
 ## Full example
 
@@ -122,12 +122,12 @@ After changing **`prisma/schema.prisma`** enums or models used in TypeScript, ru
 # 1. Edit prisma/schema.prisma
 
 # 2. Generate
-npm run db:migrate:generate add_profile_field
+pnpm run db:migrate:generate add_profile_field
 
 # 3. Review db/migrations/*_add_profile_field.sql
 
 # 4. Apply
-npm run db:migrate
+pnpm run db:migrate
 ```
 
 ## This approach vs full Prisma Migrate
@@ -142,7 +142,7 @@ npm run db:migrate
 
 - Generated SQL is a **starting point**; complex or data-sensitive changes may need hand edits.
 - Keep **`prisma/schema.prisma`** aligned with production after manual hotfixes.
-- One-off SQL: **`npm run db:migrate:new name`** and edit the file.
+- One-off SQL: **`pnpm run db:migrate:new name`** and edit the file.
 - Avoid many duplicate `*_same_name.sql` files; keep dbmate history linear and meaningful.
 
 ## See also
