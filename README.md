@@ -138,6 +138,39 @@ git push origin feature/short-name
 
 Open a PR → review → merge.
 
+## Deployment (Render)
+
+The backend is deployed on [Render](https://render.com) as a Node web service.
+The database stays on **Neon** (external) and the frontend is on **Vercel**.
+
+Configuration lives in [`render.yaml`](./render.yaml) (a Render Blueprint):
+
+- **Build**: `pnpm install --frozen-lockfile && pnpm run build`
+- **Start**: `pnpm run db:migrate && node dist/index.js` — pending dbmate migrations run on every deploy
+- **Health check**: `GET /health`
+
+### Environment variables (set in the Render dashboard)
+
+| Variable         | Notes                                                      |
+| ---------------- | ---------------------------------------------------------- |
+| `DATABASE_URL`   | Neon connection string (include `sslmode=require`)         |
+| `JWT_SECRET`     | Secret used to sign JWTs                                   |
+| `CORS_ORIGIN`    | Vercel frontend origin, e.g. `https://your-app.vercel.app` |
+| `JWT_EXPIRES_IN` | Token lifetime — already set to `7d` in `render.yaml`      |
+| `NODE_ENV`       | `production` — already set in `render.yaml`                |
+
+`PORT` is injected by Render automatically. `trust proxy` is enabled
+automatically because Render exposes `RENDER=true` (see `src/app.ts`).
+
+To deploy: in Render choose **New → Blueprint**, pick this repo, and fill in
+the three `sync: false` variables above. Pushes to `main` then auto-deploy.
+
+> **Note:** the free plan spins the service down after inactivity, so the
+> first request after an idle period is slow (cold start).
+
+Once the service is live, point the **Client**'s `VITE_PROD_API_BASE_URL`
+(in Vercel) at the Render URL, e.g. `https://tfg-server.onrender.com`.
+
 ## Project layout
 
 - `src/` — Application code (Express, routes, controllers, services, db)

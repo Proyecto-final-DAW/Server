@@ -2,7 +2,6 @@ allowBuilds:
   '@parcel/watcher': false
   '@prisma/engines': true
   esbuild: true
-  netlify-cli: false
   prisma: false
   sharp: true
   unix-dgram: false
