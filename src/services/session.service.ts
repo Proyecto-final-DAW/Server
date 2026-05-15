@@ -60,6 +60,34 @@ export const countTrainingDaysInWeek = async (
 };
 
 /**
+ * Distinct training dates (YYYY-MM-DD) inside the closed-open range
+ * `[from, to)`. Used by the dashboard streak calendar to paint past
+ * months when the user navigates back with the prev/next arrows.
+ *
+ * The cards endpoint only returns the *current ISO week* — that was
+ * fine while the calendar only highlighted "this week" progress, but
+ * with the navigation arrows the user can land on any month, and
+ * fetching the whole user history upfront would balloon the dashboard
+ * payload for long-time users. A per-range pull keeps it cheap.
+ */
+export const getTrainingDaysInRange = async (
+  userId: number,
+  from: string,
+  to: string
+): Promise<string[]> => {
+  const result = await pool.query<{ day: string }>(
+    `SELECT DISTINCT TO_CHAR(date, 'YYYY-MM-DD') AS day
+       FROM sessions
+      WHERE user_id = $1
+        AND date >= $2::date
+        AND date <  $3::date
+      ORDER BY day ASC`,
+    [userId, from, to]
+  );
+  return result.rows.map((r) => r.day);
+};
+
+/**
  * Resolves the user's weekly training target from their onboarding
  * `days_per_week` answer. Falls back to 1 (loose) when missing.
  */

@@ -15,6 +15,11 @@ router.post(
 );
 router.get('/weekly-summary', authentication, SessionController.weeklySummary);
 router.get('/history', authentication, SessionController.getHistory);
+router.get(
+  '/training-days',
+  authentication,
+  SessionController.getTrainingDays
+);
 
 // `GET /sessions/detail/:sessionId` was unreachable — no client ever
 // called it, the history endpoint already returns embedded exercises,

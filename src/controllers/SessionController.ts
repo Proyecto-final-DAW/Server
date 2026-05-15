@@ -140,6 +140,57 @@ const SessionController = {
       return sendServerError(res, err, 'SessionController.weeklySummary');
     }
   },
+
+  /**
+   * GET /sessions/training-days?from=YYYY-MM-DD&to=YYYY-MM-DD
+   * Returns the dates within `[from, to)` that contain at least one
+   * session for the user. Drives the dashboard streak calendar when
+   * the user navigates back to past months.
+   */
+  async getTrainingDays(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: 'Not authorized' });
+      }
+
+      const { from, to } = req.query as { from?: string; to?: string };
+      const isoDate = /^\d{4}-\d{2}-\d{2}$/;
+      if (!from || !to || !isoDate.test(from) || !isoDate.test(to)) {
+        return res.status(400).json({
+          message: '`from` and `to` must be YYYY-MM-DD dates',
+        });
+      }
+      if (from > to) {
+        return res
+          .status(400)
+          .json({ message: '`from` must be on or before `to`' });
+      }
+      // Hard ceiling of ~3 years per request so a malformed caller can't
+      // ask for the whole table — the calendar only ever pulls one month
+      // at a time.
+      const fromMs = Date.parse(from);
+      const toMs = Date.parse(to);
+      if (
+        Number.isFinite(fromMs) &&
+        Number.isFinite(toMs) &&
+        toMs - fromMs > 366 * 3 * 86_400_000
+      ) {
+        return res
+          .status(400)
+          .json({ message: 'Range too large (max 3 years)' });
+      }
+
+      const days = await sessionService.getTrainingDaysInRange(
+        userId,
+        from,
+        to
+      );
+      return res.status(200).json({ days });
+    } catch (err) {
+      return sendServerError(res, err, 'SessionController.getTrainingDays');
+    }
+  },
 };
 
 export default SessionController;
