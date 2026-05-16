@@ -2,21 +2,30 @@
  * streak.service.ts — Weekly training streak.
  *
  * A "streak" is the number of consecutive ISO weeks in which the user
- * trained at least once. The first session of a week qualifies that
- * week; subsequent sessions that week don't move the streak further.
+ * trained AT LEAST as many distinct days as their weekly `days_per_week`
+ * target. The session that lifts the week's distinct-day count from
+ * `target - 1` to `target` is the one that qualifies the week.
+ * Subsequent sessions that week are "bonus" — already qualified.
  *
- * Why ≥1 session and not the user's `days_per_week` target: requiring
- * the full target left a brand-new user with target=3 staring at a 0
- * streak after their *first* gym day, and any user who registered
- * mid-week saw their first week fail to count because they hadn't hit
- * the target by Sunday. The target still matters — it powers the
- * "X / Y esta semana" progress hint and the at-risk warning — but it
- * no longer gates the streak itself. The streak is the "I keep showing
- * up" signal; the target is the "and ideally this often" goal.
+ * Why target and not ≥1: the user's contract with the app is "I'll
+ * train X days a week". Honouring less than X doesn't earn the streak;
+ * it's just attendance. With the loose ≥1 rule a user with target=4
+ * could train Mon only and keep a streak indefinitely, which broke
+ * the trust signal — they wanted "missing my commitment loses my
+ * racha", and that's now the contract.
+ *
+ * Edge cases the strict model creates:
+ *   - Brand new user (no streak yet) who trains 1/3 days: the week
+ *     does NOT qualify, streak stays at 0 until the first week they
+ *     hit the target. This is the trade-off the user accepted in
+ *     exchange for a meaningful signal.
+ *   - User changes `days_per_week` mid-week: the new target applies
+ *     to the current week immediately. A user already at 3 sessions
+ *     who downshifts target 4 → 3 retro-qualifies the week on next save.
  *
  * Source of truth:
  *   - `last_qualifying_week_monday`: ISO Monday (UTC) of the most
- *     recent qualifying week. NULL until the first target-hit ever.
+ *     recent week that hit the target. NULL until the first target-hit.
  *   - `streak`: count of consecutive qualifying weeks ending at that
  *     Monday. Stored, not recomputed, but live-expired on read when
  *     more than 1 ISO week has elapsed since the last qualifying week.
@@ -127,22 +136,30 @@ const fromLocalMidnight = (date: Date): string => {
 
 /**
  * Computes the next streak state given a session save. Pure function:
- * the caller is responsible for fetching `sessionsThisWeek` (and
- * historically `sessionsLastWeek`, kept in the input shape for API
- * compatibility but no longer used by the simplified model).
+ * the caller is responsible for fetching `target` (the user's
+ * `days_per_week` floor) and `sessionsThisWeek` (distinct training
+ * days this ISO week, INCLUDING this save).
  *
- * Cases (with the "≥1 session per week qualifies" model):
- *   - This is the first session of the ISO week (sessionsThisWeek===1):
- *       - First qualifying week ever            → streak = 1.
- *       - Previous ISO week also qualified      → streak += 1.
- *       - Otherwise (gap of ≥1 missed week)     → streak = 1 (reset).
- *   - This is a bonus session that week (sessionsThisWeek > 1)
- *     → no streak change (week already qualified earlier).
+ * Cases (under the "≥target distinct days/week qualifies" model):
+ *   - `sessionsThisWeek < target`  → week not yet qualified, no streak
+ *     change. Only `last_session_date` refreshes so the dashboard knows
+ *     the user trained.
+ *   - `sessionsThisWeek === target` → this save is the one that just
+ *     qualified the week:
+ *       - First qualifying week ever        → streak = 1.
+ *       - Previous ISO week also qualified  → streak += 1.
+ *       - Gap of ≥1 missed week             → streak = 1 (reset).
+ *   - `sessionsThisWeek > target`  → bonus session in an already-
+ *     qualified week, no streak change (just refresh last_session_date).
  *   - Backdated session in an ISO week older than the last qualifying
  *     week → no streak change (we don't rewrite history).
  */
 export const calculateStreak = (inputs: StreakInputs): StreakResult => {
-  const { current, sessionsThisWeek, sessionDate } = inputs;
+  const { current, target, sessionsThisWeek, sessionDate } = inputs;
+  // Mirror the floor in weeklyTarget.ts — a missing/zero target would
+  // collapse the qualifying gate to "any session", which is the loose
+  // model the user explicitly opted out of.
+  const safeTarget = Math.max(1, target);
 
   const sessionWeekMonday = isoWeekMonday(sessionDate);
   // `sessionDate` is local-midnight (built by `parseLocalDay()` from a
@@ -158,19 +175,31 @@ export const calculateStreak = (inputs: StreakInputs): StreakResult => {
     ? fromUtcMidnight(current.last_qualifying_week_monday)
     : '';
 
-  // Bonus session in an already-qualified week — week's already in
-  // the streak, no change.
-  if (sessionsThisWeek > 1) {
+  // Still under the target — week hasn't qualified yet. Refresh the
+  // last-trained marker but leave streak / qualifying anchor alone.
+  if (sessionsThisWeek < safeTarget) {
     return {
       streak: current.streak,
       best_streak: current.best_streak,
       last_session_date: sessionDateStr,
       last_qualifying_week_monday: lastQualifyingStr,
-      changed: true, // last_session_date refreshed
+      changed: true,
     };
   }
 
-  // sessionsThisWeek === 1 → this session is what qualifies the week.
+  // Already past target — this is a bonus session in a week that
+  // already qualified on an earlier save.
+  if (sessionsThisWeek > safeTarget) {
+    return {
+      streak: current.streak,
+      best_streak: current.best_streak,
+      last_session_date: sessionDateStr,
+      last_qualifying_week_monday: lastQualifyingStr,
+      changed: true,
+    };
+  }
+
+  // sessionsThisWeek === safeTarget → this save is the qualifying one.
 
   // Backdate: qualifying session in a week older than the last
   // qualifying week. Don't rewrite older streak entries.
@@ -187,7 +216,8 @@ export const calculateStreak = (inputs: StreakInputs): StreakResult => {
     };
   }
 
-  // First qualifying week ever — covers the brand-new user case.
+  // First qualifying week ever — happens the first time the user hits
+  // their full weekly target after onboarding.
   if (!current.last_qualifying_week_monday) {
     return {
       streak: 1,
@@ -203,9 +233,9 @@ export const calculateStreak = (inputs: StreakInputs): StreakResult => {
     current.last_qualifying_week_monday
   );
 
-  // Same week as last qualifying — defensive (sessionsThisWeek=1
-  // implies no prior qualifying session this week, but if dates get
-  // weird we don't want to double-count).
+  // Same week as last qualifying — defensive: with sessionsThisWeek
+  // exactly at target and the qualifying anchor already on this week,
+  // we'd be double-counting if we re-incremented.
   if (weeksSinceLastQualifying === 0) {
     return {
       streak: current.streak,
@@ -229,9 +259,6 @@ export const calculateStreak = (inputs: StreakInputs): StreakResult => {
   }
 
   // Gap of ≥2 weeks since last qualifying week → reset to 1.
-  // (Unlike the previous model there's no "saved-without-recording"
-  // edge case to honour: under ≥1-session qualification, every week
-  // with any session is recorded, so a gap is a real gap.)
   return {
     streak: 1,
     best_streak: Math.max(current.best_streak, 1),
@@ -294,21 +321,17 @@ export interface StreakStatus {
 /**
  * Building block for the dashboard "RACHA EN PELIGRO" warning.
  *
- * Under the ≥1-session-per-week qualification model the streak is
- * safe the moment the user trains once this ISO week. So the warning
- * fires only when:
- *   - The user has an active streak (`live > 0`), AND
- *   - They haven't trained yet this week (`sessionsThisWeek === 0`).
+ * Under the ≥target-distinct-days/week qualification model the streak
+ * is in danger whenever the user can't physically hit the remaining
+ * sessions before the ISO week ends. Concretely:
+ *   - `live > 0` (there's a streak to lose), AND
+ *   - `sessionsRemaining > 0` (haven't hit target yet), AND
+ *   - `sessionsRemaining > daysRemaining` (one session per remaining
+ *     day still wouldn't be enough).
  *
- * The previous version compared `daysRemaining` against
- * `target - sessionsThisWeek`, which was correct under the old "must
- * hit target" model but mis-fired under the current one — a user with
- * 1 session done and target 5 was flagged as "in danger of losing the
- * streak" even though the week was already qualified.
- *
- * `sessionsRemaining` is still surfaced so the dashboard can show the
- * weekly target progress separately ("X / Y esta semana") without
- * conflating it with streak survival.
+ * `daysRemaining` is whole days until next Monday 00:00 UTC. We use
+ * `ceil` instead of `floor` so a Sunday morning save still has "1 day
+ * left", not "0".
  */
 export const calculateStreakStatus = (
   state: StreakState,
@@ -317,7 +340,8 @@ export const calculateStreakStatus = (
   now: Date = new Date()
 ): StreakStatus => {
   const live = liveStreak(state, now);
-  const sessionsRemaining = Math.max(0, target - sessionsThisWeek);
+  const safeTarget = Math.max(1, target);
+  const sessionsRemaining = Math.max(0, safeTarget - sessionsThisWeek);
 
   const monday = isoWeekMonday(now);
   const endOfWeek = new Date(monday.getTime() + 7 * 86_400_000);
@@ -325,10 +349,14 @@ export const calculateStreakStatus = (
     0,
     Math.ceil((endOfWeek.getTime() - now.getTime()) / 3_600_000)
   );
+  const daysRemaining = Math.max(0, Math.ceil(hoursRemaining / 24));
 
-  // Streak alive AND no session yet this week → the only state where
-  // missing the rest of the week actually breaks the streak.
-  const isAtRisk = live > 0 && sessionsThisWeek === 0;
+  // Active streak, target not yet hit, and not enough days left to
+  // physically reach target → the streak dies at week rollover unless
+  // the user trains today AND every day after. Surface the warning so
+  // the dashboard can nudge.
+  const isAtRisk =
+    live > 0 && sessionsRemaining > 0 && sessionsRemaining > daysRemaining;
 
   return {
     currentStreak: live,
@@ -336,6 +364,6 @@ export const calculateStreakStatus = (
     sessionsRemaining,
     hoursRemaining,
     isAtRisk,
-    target,
+    target: safeTarget,
   };
 };
