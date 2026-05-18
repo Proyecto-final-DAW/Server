@@ -152,6 +152,40 @@ export async function updateProfile(
       result.rows[0] as Record<string, unknown>
     );
 
+    // Mirror the weight change into `weight_logs` so the progress
+    // chart picks it up. Without this, editing the weight from the
+    // profile silently updated `users.weight` and recalculated macros,
+    // but the body-weight chart (which reads exclusively from
+    // weight_logs) kept showing the old value until the user manually
+    // registered a weight from /progress. No UNIQUE (user_id, date)
+    // constraint exists on weight_logs — only an index — so we can't
+    // use ON CONFLICT. Insert-if-missing + update-otherwise is safe
+    // here because we're already inside the surrounding profile
+    // transaction.
+    if (updatedColumns.includes('weight')) {
+      const rawWeight = updatedUser.weight as unknown;
+      const weightValue =
+        typeof rawWeight === 'number' ? rawWeight : Number(rawWeight);
+      if (Number.isFinite(weightValue) && weightValue > 0) {
+        const inserted = await client.query(
+          `INSERT INTO weight_logs (user_id, weight, date)
+           SELECT $1, $2, CURRENT_DATE
+           WHERE NOT EXISTS (
+             SELECT 1 FROM weight_logs
+              WHERE user_id = $1 AND date = CURRENT_DATE
+           )`,
+          [userId, weightValue]
+        );
+        if (inserted.rowCount === 0) {
+          await client.query(
+            `UPDATE weight_logs SET weight = $2
+              WHERE user_id = $1 AND date = CURRENT_DATE`,
+            [userId, weightValue]
+          );
+        }
+      }
+    }
+
     const needsRecalc = updatedColumns.some((f) =>
       MACRO_TRIGGER_FIELDS.includes(f)
     );
