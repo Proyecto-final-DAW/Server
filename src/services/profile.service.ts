@@ -157,32 +157,31 @@ export async function updateProfile(
     // profile silently updated `users.weight` and recalculated macros,
     // but the body-weight chart (which reads exclusively from
     // weight_logs) kept showing the old value until the user manually
-    // registered a weight from /progress. No UNIQUE (user_id, date)
-    // constraint exists on weight_logs — only an index — so we can't
-    // use ON CONFLICT. Insert-if-missing + update-otherwise is safe
-    // here because we're already inside the surrounding profile
-    // transaction.
+    // registered a weight from /progress.
+    //
+    // Convention: one row per (user, day). The previous version of
+    // this branch UPDATED weight_logs WHERE date = CURRENT_DATE — but
+    // /progress historically allowed multiple inserts per day, so
+    // pre-existing days could hold 2..N rows and the UPDATE rewrote
+    // every one of them to the same new value (the "flat line"
+    // collapse the user spotted). DELETE + INSERT collapses any
+    // existing duplicates into the single intended row in one shot,
+    // and stays atomic thanks to the surrounding transaction.
     if (updatedColumns.includes('weight')) {
       const rawWeight = updatedUser.weight as unknown;
       const weightValue =
         typeof rawWeight === 'number' ? rawWeight : Number(rawWeight);
       if (Number.isFinite(weightValue) && weightValue > 0) {
-        const inserted = await client.query(
+        await client.query(
+          `DELETE FROM weight_logs
+            WHERE user_id = $1 AND date = CURRENT_DATE`,
+          [userId]
+        );
+        await client.query(
           `INSERT INTO weight_logs (user_id, weight, date)
-           SELECT $1, $2, CURRENT_DATE
-           WHERE NOT EXISTS (
-             SELECT 1 FROM weight_logs
-              WHERE user_id = $1 AND date = CURRENT_DATE
-           )`,
+           VALUES ($1, $2, CURRENT_DATE)`,
           [userId, weightValue]
         );
-        if (inserted.rowCount === 0) {
-          await client.query(
-            `UPDATE weight_logs SET weight = $2
-              WHERE user_id = $1 AND date = CURRENT_DATE`,
-            [userId, weightValue]
-          );
-        }
       }
     }
 

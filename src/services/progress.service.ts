@@ -86,6 +86,19 @@ export const registerWeight = async (
     // calendar day, no timezone gymnastics.
     const isoDate = toLocalIsoDate(date);
 
+    // One row per (user, day). Without the DELETE step a user that
+    // taps "registrar peso" twice in the same day ended up with two
+    // rows of conflicting weight on the same date, which (a) made the
+    // chart render two stacked points and (b) compounded with the
+    // profile-edit DELETE+INSERT path to produce the "flat line"
+    // collapse when the macros recalc later rewrote them in bulk.
+    // Idempotent here too: re-registering today's weight overwrites
+    // instead of duplicating.
+    await client.query(
+      `DELETE FROM weight_logs WHERE user_id = $1 AND date = $2`,
+      [userId, isoDate]
+    );
+
     const inserted = await client.query(
       `INSERT INTO weight_logs (user_id, weight, date)
        VALUES ($1, $2, $3)
